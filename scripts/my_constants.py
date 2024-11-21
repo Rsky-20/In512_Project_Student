@@ -24,6 +24,8 @@ UP_LEFT = 5
 UP_RIGHT = 6
 DOWN_LEFT = 7
 DOWN_RIGHT = 8
+DIRECTION = {1: 'left', 2: 'right', 3: 'up', 4: 'down', 5: 'up_left', 6: 'up_right', 7: 'down_left', 8: 'down_right'}
+OPPOSITE_DIRECTION_INDEX = {1: 2, 2: 1, 3: 4, 4: 3, 5: 8, 6: 7, 7: 6, 8: 5}
 
 """ BROADCAST TYPES """
 KEY_DISCOVERED = 1  #inform other agents that you discovered a key

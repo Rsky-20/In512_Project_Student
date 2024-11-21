@@ -43,6 +43,7 @@ class Server:
         print("Server ready! Waiting for connections...")
         while self.id_count < self.nb_agents:
             conn, addr = self.s.accept()
+            print(f'Agent connexion : {conn}')
             with self.clients_lock:
                 self.clients.append(conn)
             Thread(target=self.client_cb, daemon=True, args=(conn, addr, self.id_count)).start()

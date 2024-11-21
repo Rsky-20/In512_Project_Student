@@ -11,7 +11,7 @@ img_folder = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file
 
 
 class GUI:
-    def __init__(self, game, fps=10, cell_size=40):
+    def __init__(self, game, fps=10, cell_size=25):
         self.game = game
         self.w, self.h = self.game.map_w, self.game.map_h
         self.fps = fps
@@ -96,4 +96,6 @@ class GUI:
             self.screen.blit(self.agents[i], self.agents[i].get_rect(center=(self.game.agents[i].x*self.cell_size + self.cell_size//2, self.game.agents[i].y*self.cell_size + self.cell_size//2)))
             self.screen.blit(self.text_agents[i], self.text_agents[i].get_rect(center=(self.game.agents[i].x*self.cell_size + self.cell_size-self.text_agents[i].get_width()//2, self.game.agents[i].y*self.cell_size + self.cell_size-self.text_agents[i].get_height()//2)))
 
+        
+        
         pygame.display.update()

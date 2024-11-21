@@ -10,6 +10,7 @@ from my_constants import *
 from threading import Thread
 import numpy as np
 from time import sleep
+import random
 
 
 class Agent:
@@ -28,12 +29,15 @@ class Agent:
         self.nb_agent_connected = 0
         self.x, self.y = env_conf["x"], env_conf["y"]   #initial agent position
         self.w, self.h = env_conf["w"], env_conf["h"]   #environment dimensions
+        self.agent_state = None
         cell_val = env_conf["cell_val"] #value of the cell the agent is located in
-        print(cell_val)
         Thread(target=self.msg_cb, daemon=True).start()
-        print("hello")
         self.wait_for_connected_agent()
-
+        sleep(5)
+        self.orders, self.path = self.generate_directions()
+        self.explore()
+        #Thread(target=self.explore, daemon=True).start()
+    
         
     def msg_cb(self): 
         """ Method used to handle incoming messages """
@@ -42,27 +46,121 @@ class Agent:
             self.msg = msg
             if msg["header"] == MOVE:
                 self.x, self.y =  msg["x"], msg["y"]
-                print(self.x, self.y)
             elif msg["header"] == GET_NB_AGENTS:
                 self.nb_agent_expected = msg["nb_agents"]
             elif msg["header"] == GET_NB_CONNECTED_AGENTS:
-                self.nb_agent_connected = msg["nb_connected_agents"]
+                self.nb_agent_connected = msg["nb_connected_agents"]            
 
-            print("hellooo: ", msg)
-            print("agent_id ", self.agent_id)
-            
 
     def wait_for_connected_agent(self):
         self.network.send({"header": GET_NB_AGENTS})
         check_conn_agent = True
         while check_conn_agent:
             if self.nb_agent_expected == self.nb_agent_connected:
-                print("both connected!")
+                print("[Agents] - both connected!")
                 check_conn_agent = False
-
                   
 
     #TODO: CREATE YOUR METHODS HERE...
+    def generate_directions(self):
+        current_pos = (self.x, self.y)
+        to_visit = set()  # Suivi des cases visitées
+        to_visit.add(current_pos)
+        orders = []  # Liste des ordres de direction
+        points = [current_pos]  # Liste des points visités (pour dessiner le chemin)
+
+        # Fonction pour convertir un mouvement en coordonnées
+        def move(position, direction):
+            x, y = position
+            dir_name = DIRECTION[direction]  # Récupérer le nom de la direction
+            if dir_name == "up":
+                return x - 1, y
+            elif dir_name == "down":
+                return x + 1, y
+            elif dir_name == "left":
+                return x, y - 1
+            elif dir_name == "right":
+                return x, y + 1
+            elif dir_name == "up_left":
+                return x - 1, y - 1
+            elif dir_name == "up_right":
+                return x - 1, y + 1
+            elif dir_name == "down_left":
+                return x + 1, y - 1
+            elif dir_name == "down_right":
+                return x + 1, y + 1
+            return position
+
+        # Fonction pour déterminer les mouvements valides
+        def valid_moves(position):
+            x, y = position
+            moves = []
+            for direction in DIRECTION:  # Parcourir les clés du dictionnaire
+                nx, ny = move((x, y), direction)
+                if 0 <= nx < self.w and 0 <= ny < self.h:  # Rester dans les limites de la grille
+                    moves.append(direction)
+            return moves
+
+        # Génération du chemin
+        while len(to_visit) < self.w * self.h:
+            # Récupérer les mouvements valides
+            valid_directions = valid_moves(current_pos)
+
+            # Priorité : éviter de revisiter les cases si possible
+            next_moves = [
+                direction for direction in valid_directions
+                if move(current_pos, direction) not in to_visit
+            ]
+
+            # Si toutes les cases voisines sont visitées, autoriser la revisite
+            if not next_moves:
+                next_moves = valid_directions
+
+            # Choisir une direction au hasard parmi les options
+            chosen_direction = random.choice(next_moves)
+
+            # Appliquer le mouvement
+            current_pos = move(current_pos, chosen_direction)
+            orders.append(chosen_direction)  # Ajouter la direction (clé numérique)
+            points.append(current_pos)  # Ajouter le nouveau point visité
+            to_visit.add(current_pos)
+
+        return orders, points
+
+    def explore(self):
+        # Obtenir les ordres et les points générés par generate_directions
+        orders, points = self.generate_directions()
+
+        # Explorer en suivant les ordres générés
+        for direction in orders:
+            self.move(direction)  # Effectuer le mouvement
+            sleep(0.1)  # Pause pour visualisation (ajuster si nécessaire)
+
+
+
+                
+    def move(self, direction):
+        self.network.send({'header': 2, 'direction': direction})
+        sleep(0.05)
+        
+    def get_data(self):
+        try:
+            self.network.send({'header': 1})
+            print(self.msg)
+            return self.msg['cell_val']
+        except:
+            return None
+        
+    def communicate_discovery(self, discovery_type, x, y):
+        msg = {
+            "header": BROADCAST_MSG,
+            "type": discovery_type,  # 1 -> clé, 2 -> coffre
+            "position": (x, y),
+            "owner": self.agent_id
+        }
+        self.network.send(msg)
+        print(f"[agent {self.agent_id}] - Broadcasted discovery: {msg}")
+
 
             
  

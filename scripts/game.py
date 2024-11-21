@@ -22,6 +22,7 @@ class Game:
         self.moves = [(0, 0), (-1, 0), (1, 0), (0, -1), (0, 1), (-1, -1), (1, -1), (-1, 1), (1, 1)]
         self.agent_paths = [None]*nb_agents
         self.load_map(map_id)
+        #Generate obstacle randomly
         self.gui = GUI(self)
         
 
