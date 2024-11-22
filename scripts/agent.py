@@ -11,6 +11,7 @@ from threading import Thread
 import numpy as np
 from time import sleep
 import random
+import math
 
 
 class Agent:
@@ -33,10 +34,23 @@ class Agent:
         cell_val = env_conf["cell_val"] #value of the cell the agent is located in
         Thread(target=self.msg_cb, daemon=True).start()
         self.wait_for_connected_agent()
+        
         sleep(5)
-        self.orders, self.path = self.generate_directions()
-        self.explore()
+        #self.explore()
         #Thread(target=self.explore, daemon=True).start()
+        self.points_of_interest = self.get_random_interest_points()
+        print(f"[agent_{self.agent_id}] - Interesting point (size={len(self.points_of_interest)}): {self.points_of_interest}")
+        self.points_of_interest = self.determine_order(self.points_of_interest, (self.x, self.y))
+        print(f"[agent_{self.agent_id}] - Interesting point ordered (size={len(self.points_of_interest)}): {self.points_of_interest}")
+        
+        self.orders, self.path = self.generate_path()
+        #print(f"[agent_{self.agent_id}] - Commands: {self.orders}")
+        #print(f"[agent_{self.agent_id}] - Path: {self.path}")
+        
+        if self.orders and self.path:
+            self.navigate_to_points()
+        else:
+            print(f"[agent_{self.agent_id}] - WARNING: No path or No commands to move")
     
         
     def msg_cb(self): 
@@ -62,81 +76,132 @@ class Agent:
                   
 
     #TODO: CREATE YOUR METHODS HERE...
-    def generate_directions(self):
+    
+    def calculate_points(self, factor=10):
+        num_points = math.ceil(self.h / factor) + math.ceil(self.w / factor)
+        return num_points
+
+    def get_random_interest_points(self, factor=10):
+        num_points = self.calculate_points(factor)
+        points = []
+
+        while len(points) < num_points:
+            point = (random.randint(0, self.w - 1), random.randint(0, self.h - 1))
+            if point not in points:  # Éviter les doublons
+                points.append(point)
+
+        return points
+    
+    def calculate_euclidean_distance(self, point1, point2):
+        return math.sqrt((point1[0] - point2[0])**2 + (point1[1] - point2[1])**2)
+
+    def determine_order(self, points, start_pos):
+        remaining_points = points[:]
+        current_pos = start_pos
+        ordered_points = []
+
+        while remaining_points:
+            farthest_point = max(
+                remaining_points,
+                key=lambda p: self.calculate_euclidean_distance(current_pos, p)
+            )
+            ordered_points.append(farthest_point)
+            remaining_points.remove(farthest_point)
+            current_pos = farthest_point
+
+        return ordered_points
+
+    def generate_commands(self, start_pos, target_pos):
+        commands = []
+        current_pos = list(start_pos)
+        path = [tuple(current_pos)]  # Inclure la position initiale
+
+        while current_pos != list(target_pos):
+            dx = target_pos[0] - current_pos[0]
+            dy = target_pos[1] - current_pos[1]
+
+            if dx > 0 and dy > 0:
+                commands.append(DOWN_RIGHT) #"down_right"
+                current_pos[0] += 1
+                current_pos[1] += 1
+            elif dx > 0 and dy < 0:
+                commands.append(DOWN_LEFT) #"down_left"
+                current_pos[0] += 1
+                current_pos[1] -= 1
+            elif dx < 0 and dy > 0:
+                commands.append(UP_RIGHT) #"up_right"
+                current_pos[0] -= 1
+                current_pos[1] += 1
+            elif dx < 0 and dy < 0:
+                commands.append(UP_LEFT) #"up_left"
+                current_pos[0] -= 1
+                current_pos[1] -= 1
+            elif dx > 0:
+                commands.append(DOWN) #"down"
+                current_pos[0] += 1
+            elif dx < 0:
+                commands.append(UP) #"up"
+                current_pos[0] -= 1
+            elif dy > 0:
+                commands.append(RIGHT) #"right"
+                current_pos[1] += 1
+            elif dy < 0:
+                commands.append(LEFT) #"left"
+                current_pos[1] -= 1
+
+            path.append(tuple(current_pos))
+
+        return commands, path
+
+    def generate_path(self):
+        all_commands = []
+        full_path = []
         current_pos = (self.x, self.y)
-        to_visit = set()  # Suivi des cases visitées
-        to_visit.add(current_pos)
-        orders = []  # Liste des ordres de direction
-        points = [current_pos]  # Liste des points visités (pour dessiner le chemin)
 
-        # Fonction pour convertir un mouvement en coordonnées
-        def move(position, direction):
-            x, y = position
-            dir_name = DIRECTION[direction]  # Récupérer le nom de la direction
-            if dir_name == "up":
-                return x - 1, y
-            elif dir_name == "down":
-                return x + 1, y
-            elif dir_name == "left":
-                return x, y - 1
-            elif dir_name == "right":
-                return x, y + 1
-            elif dir_name == "up_left":
-                return x - 1, y - 1
-            elif dir_name == "up_right":
-                return x - 1, y + 1
-            elif dir_name == "down_left":
-                return x + 1, y - 1
-            elif dir_name == "down_right":
-                return x + 1, y + 1
-            return position
+        for point in self.points_of_interest:
+            commands, path = self.generate_commands(current_pos, point)
+            all_commands.extend(commands)
+            full_path.extend(path)
+            current_pos = point  # Mettre à jour la position actuelle
 
-        # Fonction pour déterminer les mouvements valides
-        def valid_moves(position):
-            x, y = position
-            moves = []
-            for direction in DIRECTION:  # Parcourir les clés du dictionnaire
-                nx, ny = move((x, y), direction)
-                if 0 <= nx < self.w and 0 <= ny < self.h:  # Rester dans les limites de la grille
-                    moves.append(direction)
-            return moves
+        return all_commands, full_path
 
-        # Génération du chemin
-        while len(to_visit) < self.w * self.h:
-            # Récupérer les mouvements valides
-            valid_directions = valid_moves(current_pos)
+    def navigate_to_points(self):
+        """
+        Navigue à travers le chemin donné, exécute les commandes associées et met à jour les listes.
+        """
+        while self.points_of_interest:
+            # Vérifier que des commandes et un path sont disponibles
+            if not self.orders or not self.path:
+                print(f"[agent_{self.agent_id}] - ERROR: Orders or Path is empty during navigation!")
+                break
 
-            # Priorité : éviter de revisiter les cases si possible
-            next_moves = [
-                direction for direction in valid_directions
-                if move(current_pos, direction) not in to_visit
-            ]
+            # Prochain point d'intérêt
+            target = self.points_of_interest.pop(0)  # Retirer le point d'intérêt atteint
+            commands, path = self.generate_commands((self.x, self.y), target)
 
-            # Si toutes les cases voisines sont visitées, autoriser la revisite
-            if not next_moves:
-                next_moves = valid_directions
+            # Exécuter les commandes pour atteindre le point cible
+            for command in commands:
+                if self.orders:  # Vérifier que des commandes restent
+                    self.move(command)  # Déplacer l'agent
+                    self.orders.pop(0)  # Retirer la commande exécutée
+                else:
+                    print(f"[agent_{self.agent_id}] - WARNING: No more commands to execute!")
+                    break
 
-            # Choisir une direction au hasard parmi les options
-            chosen_direction = random.choice(next_moves)
+            # Supprimer le chemin parcouru
+            for _ in path:
+                if self.path:  # Vérifier que le path n'est pas vide
+                    self.path.pop(0)
+                else:
+                    print(f"[agent_{self.agent_id}] - WARNING: No more path to remove!")
+                    break
 
-            # Appliquer le mouvement
-            current_pos = move(current_pos, chosen_direction)
-            orders.append(chosen_direction)  # Ajouter la direction (clé numérique)
-            points.append(current_pos)  # Ajouter le nouveau point visité
-            to_visit.add(current_pos)
+            # Mettre à jour la position
+            if path:
+                self.x, self.y = path[-1]  # Dernière position atteinte
 
-        return orders, points
-
-    def explore(self):
-        # Obtenir les ordres et les points générés par generate_directions
-        orders, points = self.generate_directions()
-
-        # Explorer en suivant les ordres générés
-        for direction in orders:
-            self.move(direction)  # Effectuer le mouvement
-            sleep(0.1)  # Pause pour visualisation (ajuster si nécessaire)
-
-
+            print(f"[agent_{self.agent_id}] - Navigation complete. Remaining points: {self.points_of_interest}")
 
                 
     def move(self, direction):
