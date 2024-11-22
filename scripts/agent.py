@@ -18,6 +18,7 @@ class Agent:
     """ Class that implements the behaviour of each agent based on their perception and communication with other agents """
     def __init__(self, server_ip):
         #TODO: DEINE YOUR ATTRIBUTES HERE
+        self.nav_state = {"nav_state":'nav', "last_direction":None, "last_value":None, "key":None, "box":None}
 
         #DO NOT TOUCH THE FOLLOWING INSTRUCTIONS
         self.network = Network(server_ip=server_ip)
@@ -36,21 +37,18 @@ class Agent:
         self.wait_for_connected_agent()
         
         sleep(5)
-        #self.explore()
-        #Thread(target=self.explore, daemon=True).start()
+        
         self.points_of_interest = self.get_random_interest_points()
-        print(f"[agent_{self.agent_id}] - Interesting point (size={len(self.points_of_interest)}): {self.points_of_interest}")
+        print(f"{CONSOLE_COLOR['MAGENTA']}Interesting point (size={len(self.points_of_interest)}): {self.points_of_interest}{CONSOLE_COLOR['RESET']}")
         self.points_of_interest = self.determine_order(self.points_of_interest, (self.x, self.y))
-        print(f"[agent_{self.agent_id}] - Interesting point ordered (size={len(self.points_of_interest)}): {self.points_of_interest}")
+        print(f"{CONSOLE_COLOR['MAGENTA']}Interesting point ordered (size={len(self.points_of_interest)}): {self.points_of_interest}{CONSOLE_COLOR['RESET']}")
         
         self.orders, self.path = self.generate_path()
-        #print(f"[agent_{self.agent_id}] - Commands: {self.orders}")
-        #print(f"[agent_{self.agent_id}] - Path: {self.path}")
         
         if self.orders and self.path:
             self.navigate_to_points()
         else:
-            print(f"[agent_{self.agent_id}] - WARNING: No path or No commands to move")
+            print(f"{CONSOLE_COLOR['RED']}{CONSOLE_COLOR['BOLD']}WARNING:{CONSOLE_COLOR['RESET']}{CONSOLE_COLOR['RED']} No path or No commands to move{CONSOLE_COLOR['RESET']}")
     
         
     def msg_cb(self): 
@@ -71,7 +69,7 @@ class Agent:
         check_conn_agent = True
         while check_conn_agent:
             if self.nb_agent_expected == self.nb_agent_connected:
-                print("[Agents] - both connected!")
+                print(f"{CONSOLE_COLOR['YELLOW']}[Agents] - both connected!{CONSOLE_COLOR['RESET']}")
                 check_conn_agent = False
                   
 
@@ -81,16 +79,25 @@ class Agent:
         num_points = math.ceil(self.h / factor) + math.ceil(self.w / factor)
         return num_points
 
-    def get_random_interest_points(self, factor=10):
+    def get_random_interest_points(self, factor=10, min_distance=5):
+        """
+        Génère des points d'intérêt aléatoires, dispersés sur la carte.
+        :param factor: Facteur pour calculer le nombre de points.
+        :param min_distance: Distance minimale entre les points.
+        :return: Liste des points d'intérêt.
+        """
         num_points = self.calculate_points(factor)
         points = []
 
         while len(points) < num_points:
             point = (random.randint(0, self.w - 1), random.randint(0, self.h - 1))
-            if point not in points:  # Éviter les doublons
+
+            # Vérifier que le point respecte la distance minimale avec les points existants
+            if all(self.calculate_euclidean_distance(point, existing_point) >= min_distance for existing_point in points):
                 points.append(point)
 
         return points
+
     
     def calculate_euclidean_distance(self, point1, point2):
         return math.sqrt((point1[0] - point2[0])**2 + (point1[1] - point2[1])**2)
@@ -171,37 +178,113 @@ class Agent:
         Navigue à travers le chemin donné, exécute les commandes associées et met à jour les listes.
         """
         while self.points_of_interest:
-            # Vérifier que des commandes et un path sont disponibles
-            if not self.orders or not self.path:
-                print(f"[agent_{self.agent_id}] - ERROR: Orders or Path is empty during navigation!")
-                break
-
-            # Prochain point d'intérêt
-            target = self.points_of_interest.pop(0)  # Retirer le point d'intérêt atteint
-            commands, path = self.generate_commands((self.x, self.y), target)
-
-            # Exécuter les commandes pour atteindre le point cible
-            for command in commands:
-                if self.orders:  # Vérifier que des commandes restent
-                    self.move(command)  # Déplacer l'agent
-                    self.orders.pop(0)  # Retirer la commande exécutée
-                else:
-                    print(f"[agent_{self.agent_id}] - WARNING: No more commands to execute!")
+            if self.nav_state["nav_state"] == 'nav':
+                # Vérifier que des commandes et un path sont disponibles
+                if not self.orders or not self.path:
+                    print(f"{CONSOLE_COLOR['RED']}{CONSOLE_COLOR['BOLD']}ERROR:{CONSOLE_COLOR['RESET']}{CONSOLE_COLOR['RED']} Orders or Path is empty during navigation!{CONSOLE_COLOR['RESET']}")
                     break
 
-            # Supprimer le chemin parcouru
-            for _ in path:
-                if self.path:  # Vérifier que le path n'est pas vide
-                    self.path.pop(0)
+                # Prochain point d'intérêt (ne supprime pas les points d'intérêt ici)
+                target = self.points_of_interest[0]  # Ne retire pas le point d'intérêt
+
+                # Générer les commandes et le path pour atteindre la cible si nécessaire
+                if not self.orders or not self.path:
+                    self.orders, self.path = self.generate_commands((self.x, self.y), target)
+
+                # Exécuter les commandes pour atteindre le point cible
+                while self.orders:
+                    command = self.orders.pop(0)  # Retirer la commande suivante
+                    self.move(command)  # Déplacer l'agent selon la commande
+                    self.x, self.y = self.path.pop(0)  # Mettre à jour la position avec le path
+
+                    # Vérifier la valeur de la case actuelle
+                    cell_value = self.get_data()
+                    if cell_value in [0.25, 0.5] and self.nav_state['key'] == None:
+                        # Si une valeur est détectée, supprimer le path et changer l'état
+                        print(f"{CONSOLE_COLOR['YELLOW']}>>> Key near (value: {cell_value}). Clearing path!{CONSOLE_COLOR['RESET']}")
+                        self.path = []  # Supprimer le path
+                        self.nav_state["nav_state"] = 'discover_key'
+                        break
+                    """elif cell_value in [0.3, 0.6] and self.nav_state['box'] == None:
+                        # Si une valeur est détectée, supprimer le path et changer l'état
+                        print(f"{CONSOLE_COLOR['YELLOW']}>>> Box near (value: {cell_value}). Clearing path!{CONSOLE_COLOR['RESET']}")
+                        self.path = []  # Supprimer le path
+                        self.nav_state["nav_state"] = 'discover_box'
+                        break
+                    elif cell_value == 0.35:
+                        print(f"{CONSOLE_COLOR['YELLOW']}>>> Obstacle detected. Clearing path!{CONSOLE_COLOR['RESET']}")
+                        self.path = []  # Supprimer le path
+                        self.nav_state["nav_state"] = 'obstacle_avoidance'
+                        break"""
+
+                # Mettre à jour la position
+                if self.points_of_interest:
+                    print(f"{CONSOLE_COLOR['MAGENTA']}Navigation complete. Next points: {self.points_of_interest[0]}{CONSOLE_COLOR['RESET']}")
                 else:
-                    print(f"[agent_{self.agent_id}] - WARNING: No more path to remove!")
-                    break
+                    print(f"{CONSOLE_COLOR['MAGENTA']}Navigation complete. No more points !{CONSOLE_COLOR['RESET']}")
+                
+            """elif self.nav_state["nav_state"] == 'discover_key':
+                print(f"{CONSOLE_COLOR['CYAN']}Discovering key...{CONSOLE_COLOR['RESET']}")
 
-            # Mettre à jour la position
-            if path:
-                self.x, self.y = path[-1]  # Dernière position atteinte
+                # Position initiale de la recherche
+                search_start = self.nav_state.get("search_start", (self.x, self.y))
+                self.nav_state["search_start"] = search_start  # Mettre à jour si non défini
+                last_value = self.nav_state.get("last_value", 0.0)
 
-            print(f"[agent_{self.agent_id}] - Navigation complete. Remaining points: {self.points_of_interest}")
+                # Déplacements définis par les indices de DIRECTION
+                movement_vectors = {
+                    1: (0, -1),  # left
+                    2: (0, 1),   # right
+                    3: (-1, 0),  # up
+                    4: (1, 0),   # down
+                    5: (-1, -1), # up_left
+                    6: (-1, 1),  # up_right
+                    7: (1, -1),  # down_left
+                    8: (1, 1),   # down_right
+                }
+
+                # Fonction pour vérifier les limites de la carte
+                def in_bounds(x, y):
+                    return 0 <= x < self.w and 0 <= y < self.h
+
+                # Boucle de recherche
+                for direction, (dx, dy) in movement_vectors.items():
+                    new_x, new_y = self.x + dx, self.y + dy
+
+                    if in_bounds(new_x, new_y):
+                        print(f"{CONSOLE_COLOR['CYAN']}Exploring {DIRECTION[direction]} at ({new_x}, {new_y})...{CONSOLE_COLOR['RESET']}")
+                        
+                        # Déplacer le robot
+                        self.move(DIRECTION[direction])
+                        self.x, self.y = new_x, new_y  # Mettre à jour les coordonnées
+
+                        # Vérifier la nouvelle valeur après le déplacement
+                        new_value = self.get_data()
+
+                        if new_value == 1.0:
+                            print(f"{CONSOLE_COLOR['GREEN']}Key discovered at ({self.x}, {self.y})!{CONSOLE_COLOR['RESET']}")
+                            self.nav_state["nav_state"] = 'key_found'
+                            return
+                        elif new_value > last_value:
+                            print(f"{CONSOLE_COLOR['YELLOW']}Approaching key: {new_value}{CONSOLE_COLOR['RESET']}")
+                            self.nav_state["last_value"] = new_value
+                            self.nav_state["search_start"] = (self.x, self.y)  # Mise à jour de la position de recherche
+                            return
+                        else:
+                            print(f"{CONSOLE_COLOR['MAGENTA']}Value unchanged or lower ({new_value}), continuing...{CONSOLE_COLOR['RESET']}")"""
+
+
+
+
+
+
+            """elif self.nav_state["nav_state"] == 'discover_box':
+                print(f"{CONSOLE_COLOR['CYAN']}Discovering box...{CONSOLE_COLOR['RESET']}")
+                # Logique spécifique pour découvrir une boîte ou gérer cet état
+
+            elif self.nav_state["nav_state"] == 'obstacle_avoidance':
+                print(f"{CONSOLE_COLOR['CYAN']}Avoiding obstacle...{CONSOLE_COLOR['RESET']}")
+                # Logique spécifique pour contourner un obstacle ou gérer cet état"""
 
                 
     def move(self, direction):
@@ -211,8 +294,7 @@ class Agent:
     def get_data(self):
         try:
             self.network.send({'header': 1})
-            print(self.msg)
-            return self.msg['cell_val']
+            return float(self.msg['cell_val'])
         except:
             return None
         
@@ -224,7 +306,7 @@ class Agent:
             "owner": self.agent_id
         }
         self.network.send(msg)
-        print(f"[agent {self.agent_id}] - Broadcasted discovery: {msg}")
+        print(f"{CONSOLE_COLOR['MAGENTA']}Broadcasted discovery: {msg}{CONSOLE_COLOR['RESET']}")
 
 
             
