@@ -1,119 +1,107 @@
-import subprocess
 import os
-import time
+import subprocess
 import threading
-import psutil  # Bibliothèque pour gérer les processus
-from colorama import Fore, Style  # Pour les couleurs dans la console
-import requests
+import tkinter as tk
+from tkinter import ttk, messagebox
 
-processes = []  # Liste pour suivre les processus ouverts
+# Répertoire des logs
+LOG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "log")
+os.makedirs(LOG_DIR, exist_ok=True)
 
-def stream_output(process, name, color):
-    """
-    Redirige les sorties d'un processus vers la console principale.
-    """
-    for line in iter(process.stdout.readline, b''):
-        print(f"{color}[{name}]{Style.RESET_ALL} {line.decode().strip()}")
+# Variables globales
+number_of_agents = 0  # Nombre d'agents configuré
+server_running = False  # Statut du serveur
+agent_buttons = []  # Liste des boutons des agents
 
-def launch_all():
-    """
-    Lance les processus nécessaires pour le projet :
-    - Serveur
-    - Agent
-    - Navigateur
-    """
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    print(f"Script directory: {script_dir}")
-
-    # Commande pour le serveur
-    server_command = f"cd {script_dir} && python scripts/server.py -nb 2 -i 127.0.0.1"
-    server_process = subprocess.Popen(
-        ["cmd", "/k", server_command],
-        shell=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        creationflags=subprocess.CREATE_NEW_CONSOLE
+# Fonction pour exécuter une commande dans une console distincte
+def run_in_console(command):
+    subprocess.Popen(
+        f'start cmd.exe /K "{command}"',
+        shell=True
     )
-    processes.append(server_process)
-    threading.Thread(target=stream_output, args=(server_process, "server", Fore.BLUE), daemon=True).start()
-    time.sleep(1)
 
-    # Commande pour l'agent 1
-    agent_command_1 = f"cd {script_dir} && python scripts/agent.py -i 127.0.0.1"
-    agent_process_1 = subprocess.Popen(
-        ["cmd", "/k", agent_command_1],
-        shell=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        creationflags=subprocess.CREATE_NEW_CONSOLE
-    )
-    processes.append(agent_process_1)
-    threading.Thread(target=stream_output, args=(agent_process_1, "agent_1", Fore.GREEN), daemon=True).start()
-    time.sleep(1)
-    
-    # Commande pour l'agent 2
-    agent_command_2 = f"cd {script_dir} && python scripts/agent.py -i 127.0.0.1"
-    agent_process_2 = subprocess.Popen(
-        ["cmd", "/k", agent_command_2],
-        shell=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        creationflags=subprocess.CREATE_NEW_CONSOLE
-    )
-    processes.append(agent_process_2)
-    threading.Thread(target=stream_output, args=(agent_process_2, "agent_2", Fore.GREEN), daemon=True).start()
-    time.sleep(1)
+# Fonction pour arrêter tous les processus
+def close_all_processes(validate_button, agent_count_entry, server_button):
+    global server_running
+    if server_running:
+        server_running = False
+        messagebox.showinfo("Arrêt", "Tous les processus ont été arrêtés.")
+    reset_ui(validate_button, agent_count_entry, server_button)
 
-    # Utiliser `requests` pour vérifier que le serveur est accessible
-    url = "http://127.0.0.1:5555/"
-    try:
-        response = requests.get(url)
-        if response.status_code == 200:
-            print(f"{Fore.CYAN}Serveur accessible à {url}{Style.RESET_ALL}")
-        else:
-            print(f"{Fore.RED}Erreur : Serveur inaccessible (Code {response.status_code}){Style.RESET_ALL}")
-    except requests.exceptions.RequestException as e:
-        print(f"{Fore.RED}Erreur lors de la connexion au serveur : {e}{Style.RESET_ALL}")
+# Fonction pour réinitialiser l'interface utilisateur
+def reset_ui(validate_button, agent_count_entry, server_button):
+    validate_button.config(state=tk.NORMAL)
+    agent_count_entry.config(state=tk.NORMAL)
+    server_button.config(state=tk.DISABLED, text="Démarrer le Serveur", bg="gray")
+    for button in agent_buttons:
+        button.destroy()
+    agent_buttons.clear()
 
+# Interface principale
+def create_gui():
+    root = tk.Tk()
+    root.title("Simulation Launcher")
+    root.geometry("600x400")
 
-def close_all():
-    """
-    Ferme tous les processus ouverts :
-    - Fenêtres cmd spécifiques
-    - Navigateur Internet Explorer
-    """
-    print("Fermeture de tous les processus...")
-
-    for proc in processes:
+    def validate_agents():
+        global number_of_agents
         try:
-            # Terminer le processus suivi dans la liste
-            proc.terminate()
-            proc.wait(timeout=5)
-            print(f"Processus {proc.pid} terminé.")
-        except Exception as e:
-            print(f"Erreur lors de la fermeture du processus {proc.pid}: {e}")
+            num_agents = int(agent_count_entry.get())
+            if num_agents < 1:
+                raise ValueError("Le nombre d'agents doit être supérieur ou égal à 1.")
+            number_of_agents = num_agents
+            validate_button.config(state=tk.DISABLED)
+            agent_count_entry.config(state=tk.DISABLED)
+            server_button.config(state=tk.NORMAL)
+            add_agent_buttons()
+        except ValueError as e:
+            messagebox.showerror("Erreur", str(e))
 
-    # Supplément : Fermer tous les processus `cmd.exe` et `iexplore.exe` associés
-    for proc in psutil.process_iter(attrs=["pid", "name", "cmdline"]):
-        try:
-            if proc.info["name"] == "cmd.exe":
-                # Vérifie si la commande appartient à ce projet
-                if "scripts/server.py" in " ".join(proc.info["cmdline"]) or "scripts/agent.py" in " ".join(proc.info["cmdline"]):
-                    proc.kill()
-                    print(f"Fenêtre cmd (PID {proc.info['pid']}) fermée.")
-            elif proc.info["name"] == "iexplore.exe":
-                proc.kill()
-                print(f"Internet Explorer (PID {proc.info['pid']}) fermé.")
-        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
-            pass
+    def toggle_server():
+        global server_running
+        if server_running:
+            messagebox.showinfo("Serveur", "Le serveur est déjà en cours d'exécution.")
+            return
+        command = f"python -u {os.path.join(os.path.dirname(os.path.abspath(__file__)), 'scripts/server.py')} -nb {number_of_agents}"
+        run_in_console(command)
+        server_button.config(text="Serveur Démarré", bg="green")
+        server_running = True
 
-if __name__ == '__main__':
-    launch_all()
-    loop = True
-    while loop:
-        user_input = input("Entrez une commande ('exit' pour quitter) : ")
-        if user_input == 'exit':
-            close_all()
-            time.sleep(3)
-            loop = False
-    print("Fermeture complète.")
+    def toggle_agent(agent_index):
+        if not server_running:
+            messagebox.showerror("Erreur", "Le serveur doit être démarré avant de lancer les agents.")
+            return
+
+        # Change la couleur du bouton et lance la console
+        agent_button = agent_buttons[agent_index]
+        agent_button.config(bg="green", text=f"Agent {agent_index} Démarré")
+        command = f"python -u {os.path.join(os.path.dirname(os.path.abspath(__file__)), 'scripts/agent.py')}"
+        run_in_console(command)
+        
+
+    def close_all():
+        close_all_processes(validate_button, agent_count_entry, server_button)
+
+    # Interface Tkinter
+    ttk.Label(root, text="Nombre d'agents:").grid(row=0, column=0, sticky=tk.W, padx=5, pady=5)
+    agent_count_entry = ttk.Entry(root)
+    agent_count_entry.grid(row=0, column=1, padx=5, pady=5)
+
+    validate_button = ttk.Button(root, text="Valider le nombre d'agents", command=validate_agents)
+    validate_button.grid(row=0, column=2, padx=5, pady=5)
+
+    server_button = tk.Button(root, text="Démarrer le Serveur", command=toggle_server, bg="gray", state=tk.DISABLED)
+    server_button.grid(row=1, column=0, padx=5, pady=5)
+
+    ttk.Button(root, text="Arrêter Tous", command=close_all).grid(row=1, column=2, padx=5, pady=5)
+
+    def add_agent_buttons():
+        for i in range(number_of_agents):
+            agent_button = tk.Button(root, text=f"Lancer Agent {i}", command=lambda idx=i: toggle_agent(idx), bg="gray")
+            agent_button.grid(row=2 + i, column=0, padx=5, pady=5)
+            agent_buttons.append(agent_button)
+
+    root.mainloop()
+
+if __name__ == "__main__":
+    create_gui()

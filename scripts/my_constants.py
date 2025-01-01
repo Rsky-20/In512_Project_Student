@@ -26,6 +26,16 @@ DOWN_LEFT = 7
 DOWN_RIGHT = 8
 DIRECTION = {1: 'left', 2: 'right', 3: 'up', 4: 'down', 5: 'up_left', 6: 'up_right', 7: 'down_left', 8: 'down_right'}
 OPPOSITE_DIRECTION_INDEX = {1: 2, 2: 1, 3: 4, 4: 3, 5: 8, 6: 7, 7: 6, 8: 5}
+DIRECTION_MAP = {
+            1: (0, -1),   # left
+            2: (0, 1),    # right
+            3: (-1, 0),   # up
+            4: (1, 0),    # down
+            5: (-1, -1),  # up_left
+            6: (-1, 1),   # up_right
+            7: (1, -1),   # down_left
+            8: (1, 1)     # down_right
+        }
 
 """ BROADCAST TYPES """
 KEY_DISCOVERED = 1  #inform other agents that you discovered a key
@@ -36,6 +46,7 @@ COMPLETED = 3   #inform other agents that you discovered your key and you reache
 GAME_ID = -1    #id of the game when it sends a message to an agent
 KEY_NEIGHBOUR_PERCENTAGE = 0.5  #value of an adjacent cell to a key
 BOX_NEIGHBOUR_PERCENTAGE = 0.6  #value of an adjacent cell to a key
+OBSTACLE_NEIGHBOUR_PERCENTAGE = 0.35
 KEY_TYPE = 0    #one of the types of item that is output by the 'Get item owner' request
 BOX_TYPE = 1
 

@@ -11,7 +11,7 @@ import numpy as np
 from my_constants import *
 from gui import GUI
 from time import sleep
-
+import random
 
 class Game:
     """ Handle the whole game """
@@ -22,9 +22,48 @@ class Game:
         self.moves = [(0, 0), (-1, 0), (1, 0), (0, -1), (0, 1), (-1, -1), (1, -1), (-1, 1), (1, 1)]
         self.agent_paths = [None]*nb_agents
         self.load_map(map_id)
+        self.load_obstacles(num_obstacles=nb_agents)
         #Generate obstacle randomly
         self.gui = GUI(self)
         
+    
+    def load_obstacles(self, num_obstacles=3):
+        """
+        Génère et place des obstacles en forme de L sur la carte.
+        """
+        def create_L_shape():
+            """Crée une matrice représentant un obstacle en forme de L avec rotation aléatoire."""
+            base_L = np.array([
+                [0.35, 0.35, 0.35, 0, 0],
+                [0.35, 1.0,  0.35, 0, 0],
+                [0.35, 1.0,  0.35, 0.35, 0.35],
+                [0.35, 1.0,  1.0,  1.0,  0.35],
+                [0.35, 0.35, 0.35, 0.35, 0.35]
+            ])
+            rotations = random.choice([0, 1, 2, 3])  # Rotation aléatoire (0°, 90°, 180°, 270°)
+            return np.rot90(base_L, rotations)
+
+        obstacle_size = 5  # Taille des obstacles
+        for _ in range(num_obstacles):
+            placed = False
+            attempts = 0
+
+            while not placed and attempts < 100:
+                attempts += 1
+                obstacle = create_L_shape()
+                x = random.randint(0, self.map_h - obstacle_size)
+                y = random.randint(0, self.map_w - obstacle_size)
+
+                # Vérifie si la zone est libre pour placer tout l'obstacle
+                if np.sum(self.map_real[x:x + obstacle_size, y:y + obstacle_size]) == 0:
+                    # Place tout l'obstacle
+                    self.map_real[x:x + obstacle_size, y:y + obstacle_size] = obstacle
+                    placed = True
+
+            if not placed:
+                print(f"Impossible de placer un obstacle après {attempts} tentatives.")
+
+
 
     
     def load_map(self, map_id):
@@ -53,7 +92,7 @@ class Game:
                         self.add_val(item.x + dx, item.y + dy, item.neighbour_percent/(i+1))
                     else:
                         self.add_val(item.x, item.y, 1)
-
+        
     
     def add_val(self, x, y, val):
         """ Add a value if x and y coordinates are in the range [map_w; map_h] """
