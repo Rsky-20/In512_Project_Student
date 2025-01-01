@@ -75,7 +75,7 @@ def create_gui():
         # Change la couleur du bouton et lance la console
         agent_button = agent_buttons[agent_index]
         agent_button.config(bg="green", text=f"Agent {agent_index} Démarré")
-        command = f"python -u {os.path.join(os.path.dirname(os.path.abspath(__file__)), 'scripts/agent.py')}"
+        command = f"python -u {os.path.join(os.path.dirname(os.path.abspath(__file__)), 'scripts/agent.py')} --run autonomous --display_info true"
         run_in_console(command)
         
 

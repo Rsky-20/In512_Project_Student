@@ -28,6 +28,9 @@ class Server:
         self.id_count = 0
         self.conf = conf
         self.nb_agents = nb_agents
+        
+        self.agent_state = [1]*nb_agents
+        
         self.clients = []
         self.clients_lock = Lock()
         print(f"Server configuration: {conf}")
@@ -64,12 +67,21 @@ class Server:
                 msg = pickle.loads(conn.recv(1024))
                 if msg["header"] == BROADCAST_MSG:
                     msg["sender"] = client_id
+                    if "nav_state" in msg and msg["nav_state"] == COMPLETED:
+                        self.agent_state[client_id] = 0
                     self.send_to_all(conn, msg)
                 else:
                     reply = self.game.process(msg, client_id)
                     conn.send(pickle.dumps(reply))
+                
+                # Vérifier si tous les agents ont terminé
+                if all(state == 0 for state in self.agent_state):
+                    print("All agents have completed their tasks. Shutting down the server.")
+                    self.shutdown_server()
+                    break
         except Exception as e:
-            pass
+            print(f"Error with client {client_id}: {e}")
+
         finally:
             print(f"Closing connection with {addr[0]} on port {addr[1]}")
             with self.clients_lock:
@@ -79,6 +91,30 @@ class Server:
                 if self.nb_disconnected >= self.nb_agents:
                     self.game.gui.running = False
                     sys.exit()
+    
+    
+    def shutdown_server(self):
+        """ Shutdown the server gracefully """
+        print("Shutting down the server...")
+        with self.clients_lock:
+            # Fermer toutes les connexions clientes
+            for client in self.clients:
+                try:
+                    client.close()
+                except Exception as e:
+                    print(f"Error closing client connection: {e}")
+            self.clients.clear()
+
+        # Fermer le socket principal du serveur
+        try:
+            self.s.close()
+            print("Server socket closed.")
+        except Exception as e:
+            print(f"Error closing server socket: {e}")
+
+        # Arrêter proprement le processus principal
+        self.game.gui.running = False
+        sys.exit()
 
 
     def send_to_all(self, sender, msg):

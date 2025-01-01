@@ -113,6 +113,9 @@ class Game:
             return {"sender": GAME_ID, "header": GET_NB_AGENTS, "nb_agents": self.nb_agents}
         elif msg["header"] == GET_ITEM_OWNER:
             return self.handle_item_owner_request(agent_id)
+        elif msg["header"] == BROADCAST_MSG:
+            # Diffuser le message à tous les agents sauf l'expéditeur
+            self.broadcast_message(msg, agent_id)
         
 
     def handle_move(self, msg, agent_id):
@@ -138,6 +141,22 @@ class Game:
         for i, box in enumerate(self.boxes):    #check if it's a box
             if (self.agents[agent_id].x == box.x) and (self.agents[agent_id].y == box.y):
                 return  {"sender": GAME_ID, "header": GET_ITEM_OWNER, "owner": i, "type": BOX_TYPE}
+
+    def broadcast_message(self, msg, sender_id):
+        """
+        Diffuse un message à tous les agents sauf l'expéditeur.
+        Args:
+            msg (dict): Le message à diffuser.
+            sender_id (int): L'identifiant de l'expéditeur.
+        """
+        for agent_id in range(self.nb_agents):
+            if agent_id != sender_id:
+                try:
+                    # Simuler l'envoi du message à un agent
+                    print(f"Broadcasting message to agent {agent_id}: {msg}")
+                    # Logique d'envoi réel à implémenter si nécessaire
+                except Exception as e:
+                    print(f"Error broadcasting message to agent {agent_id}: {e}")
 
 
 class Agent:
