@@ -294,6 +294,7 @@ class Agent:
         def is_within_bounds(x, y):
             """Vérifie si les coordonnées sont dans les limites de la carte."""
             return 0 <= x < self.w and 0 <= y < self.h
+
         if self.verbose:
             print(f"{CONSOLE_COLOR['CYAN']}[BEHAVIOR>'move_to_coordinates']{CONSOLE_COLOR['RESET']} - Starting navigation to ({target_x}, {target_y}).")
 
@@ -323,37 +324,45 @@ class Agent:
             self.move(direction)
             cell_type, _ = self.get_data()
 
+            # Vérifie si un obstacle est rencontré
             if cell_type == "OBSTACLE_NEIGHBOR":
                 if self.verbose:
                     print(f"{CONSOLE_COLOR['YELLOW']}[WARNING>'move_to_coordinates'] - Obstacle detected at ({self.x}, {self.y}). Changing path.{CONSOLE_COLOR['RESET']}")
                 # Reculer d'une case dans la direction opposée
                 reverse_direction = OPPOSITE_DIRECTION_INDEX[direction]
                 self.move(reverse_direction)
+                sleep(0.1)  # Pause pour éviter la collision
 
-                # Déplacement latéral de 3 cases à 90° de la direction initiale
-                lateral_direction = (direction + 2) % 8  # Détermine la direction perpendiculaire
+                # Déplacement latéral de 3 cases
+                lateral_direction = (direction + 2) % 8  # Direction perpendiculaire
                 for _ in range(3):
                     lateral_dx, lateral_dy = DIRECTION_MAP[lateral_direction]
                     new_x, new_y = self.x + lateral_dx, self.y + lateral_dy
 
                     if is_within_bounds(new_x, new_y):
                         self.move(lateral_direction)
-                        self.x, self.y = new_x, new_y
+                        cell_type, _ = self.get_data()
+                        if cell_type != "OBSTACLE_NEIGHBOR":
+                            self.x, self.y = new_x, new_y
+                            break
                     else:
                         if self.verbose:
                             print(f"{CONSOLE_COLOR['YELLOW']}[WARNING>'move_to_coordinates'] - Cannot move further laterally. Stuck near ({self.x}, {self.y}).{CONSOLE_COLOR['RESET']}")
                         break
-                # Relance la fonction à partir de la nouvelle position
+
+                # Relance la navigation depuis la nouvelle position
                 if self.verbose:
                     print(f"{CONSOLE_COLOR['CYAN']}[BEHAVIOR>'move_to_coordinates']{CONSOLE_COLOR['RESET']} - Retrying navigation from ({self.x}, {self.y}).")
-                return self.move_to_coordinates(target_x, target_y)
+                continue
 
-            # Mise à jour de la position
+            # Mise à jour des coordonnées locales après mouvement
             self.x, self.y = self.x + DIRECTION_MAP[direction][0], self.y + DIRECTION_MAP[direction][1]
             if self.verbose:
-                print(f"{CONSOLE_COLOR['GREEN']}[INFO>'move_to_coordinate']{CONSOLE_COLOR['RESET']} - Moved to ({self.x}, {self.y}). Continuing to ({target_x}, {target_y}).")
+                print(f"{CONSOLE_COLOR['GREEN']}[INFO>'move_to_coordinates']{CONSOLE_COLOR['RESET']} - Moved to ({self.x}, {self.y}). Continuing to ({target_x}, {target_y}).")
+
         if self.verbose:
-            print(f"{CONSOLE_COLOR['GREEN']}[INFO>'move_to_coordinate']{CONSOLE_COLOR['RESET']} - Successfully reached ({target_x}, {target_y}).")
+            print(f"{CONSOLE_COLOR['GREEN']}[INFO>'move_to_coordinates']{CONSOLE_COLOR['RESET']} - Successfully reached ({target_x}, {target_y}).")
+
 
 
     def avoid_obstacle(self):
