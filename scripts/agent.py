@@ -61,6 +61,7 @@ class Agent:
         self.end_date_time = None
         self.last_display_time = datetime.now()  # Dernière fois que l'affichage a été mis à jour
         self.points_of_interest = []            
+        self.internal_agent_broadcast_stat = {"nb_send":0, "nb_receive":0, "box_coord_found_by_other":False, "key_coord_found_by_other":False}
         
 
     def msg_cb(self):
@@ -164,11 +165,11 @@ class Agent:
                 current_pos[0] += 1
                 current_pos[1] += 1
             elif dx > 0 and dy < 0:
-                commands.append(DOWN_LEFT)
+                commands.append(UP_RIGHT)
                 current_pos[0] += 1
                 current_pos[1] -= 1
             elif dx < 0 and dy > 0:
-                commands.append(UP_RIGHT)
+                commands.append(DOWN_LEFT)
                 current_pos[0] -= 1
                 current_pos[1] += 1
             elif dx < 0 and dy < 0:
@@ -176,16 +177,16 @@ class Agent:
                 current_pos[0] -= 1
                 current_pos[1] -= 1
             elif dx > 0:
-                commands.append(DOWN)
+                commands.append(RIGHT)
                 current_pos[0] += 1
             elif dx < 0:
-                commands.append(UP)
+                commands.append(LEFT)
                 current_pos[0] -= 1
             elif dy > 0:
-                commands.append(RIGHT)
+                commands.append(DOWN)
                 current_pos[1] += 1
             elif dy < 0:
-                commands.append(LEFT)
+                commands.append(UP)
                 current_pos[1] -= 1
 
             path.append(tuple(current_pos))
@@ -295,14 +296,25 @@ class Agent:
         """
                 
         self.orders, self.path = self.generate_commands((self.x, self.y), (target_x, target_y))
+        print(self.path)
+        print(self.orders)
+        is_opposite = False
         while self.orders:
             command = self.orders.pop(0)
             self.nav_state["last_direction"] = command
             self.nav_state["last_coord"] = (self.x, self.y)
             self.path.pop(0)
-            self.move(command)
+            last_dist = self.calculate_euclidean_distance((self.x, self.y),(target_x, target_y))
+            if is_opposite:
+                self.move(OPPOSITE_DIRECTION_INDEX[command])
+            else:
+                self.move(command)
+            new_dist = self.calculate_euclidean_distance((self.x, self.y),(target_x, target_y))
             self.visit_cell((self.x, self.y))
-            sleep(0.1)
+            if new_dist>last_dist:
+                is_opposite = True
+            
+            sleep(1)
         
         
 
@@ -455,16 +467,19 @@ class Agent:
             discovery_type = msg.get("type")  # Type d'élément découvert (clé ou boîte)
             position = msg.get("position")  # Coordonnées de l'élément découvert
             owner = msg.get("owner")  # Propriétaire de l'élément découvert
+            self.internal_agent_broadcast_stat['nb_receive']+=1
 
             if discovery_type == KEY_TYPE and owner == self.agent_id:
                 # Met à jour les coordonnées de la clé si elle appartient à cet agent
                 self.nav_state["key"]["coord"] = position
+                self.internal_agent_broadcast_stat['key_coord_found_by_other'] = True
                 if self.verbose:
                     print(f"{CONSOLE_COLOR['GREEN']}[INFO>'handle_broadcast_message']{CONSOLE_COLOR['RESET']} - Updated key position to {position} for agent {self.agent_id}.")
 
             elif discovery_type == BOX_TYPE and owner == self.agent_id:
                 # Met à jour les coordonnées de la boîte si elle appartient à cet agent
                 self.nav_state["box"]["coord"] = position
+                self.internal_agent_broadcast_stat['box_coord_found_by_other'] = True
                 if self.verbose:
                     print(f"{CONSOLE_COLOR['GREEN']}[INFO>'handle_broadcast_message']{CONSOLE_COLOR['RESET']} - Updated box position to {position} for agent {self.agent_id}.")
 
@@ -520,6 +535,7 @@ class Agent:
 
             # Envoi du message
             self.network.send(msg)
+            self.internal_agent_broadcast_stat['nb_send']+=1
             if self.verbose:
                 print(f"{CONSOLE_COLOR['MAGENTA']}[BROADCAST>'communicate_discovery'] - {msg}{CONSOLE_COLOR['RESET']}")
 
@@ -548,6 +564,7 @@ class Agent:
             "nav_state": COMPLETED
         }
         self.network.send(msg)
+        self.internal_agent_broadcast_stat['nb_send']+=1
         if self.verbose:
             print(f"{CONSOLE_COLOR['MAGENTA']}[BRODCAST>'communicate_completed_mission'] - {msg}{CONSOLE_COLOR['RESET']}")
         
@@ -663,22 +680,31 @@ class Agent:
         
         # Calcul du pourcentage de découverte
         percentage_discovered = (unique_cells / total_cells) * 100 if total_cells > 0 else 0
-
+        ration_unique_vs_visited = total_cells/unique_cells
 
         print(f"""
 {CONSOLE_COLOR['BLUE']}============ Robot Information ============{CONSOLE_COLOR['RESET']}
-Start Date Time: {CONSOLE_COLOR['YELLOW']}{self.start_date_time.strftime("%Y-%m-%d %H:%M:%S")}{CONSOLE_COLOR['RESET']}
-End Date Time: {CONSOLE_COLOR['YELLOW']}{end_time.strftime("%Y-%m-%d %H:%M:%S")}{CONSOLE_COLOR['RESET']}
-Discovering Time: {CONSOLE_COLOR['GREEN']}{elapsed_seconds:.2f} seconds{CONSOLE_COLOR['RESET']}
+[TIME PROCESSING]
+ > Start Date Time: {CONSOLE_COLOR['YELLOW']}{self.start_date_time.strftime("%Y-%m-%d %H:%M:%S")}{CONSOLE_COLOR['RESET']}
+ > End Date Time: {CONSOLE_COLOR['YELLOW']}{end_time.strftime("%Y-%m-%d %H:%M:%S")}{CONSOLE_COLOR['RESET']}
+ > Discovering Time: {CONSOLE_COLOR['GREEN']}{elapsed_seconds:.2f} seconds{CONSOLE_COLOR['RESET']}
 
-Navigation status:
+ > Navigation status:
 {CONSOLE_COLOR['BLUE']}{self.nav_state}{CONSOLE_COLOR['RESET']}
 
-Robot coord : ({self.x}, {self.y})
+ > Robot coord : ({self.x}, {self.y})
 
-Number of visited cells: {CONSOLE_COLOR['YELLOW']}{self.get_visited_cell_count()}{CONSOLE_COLOR['RESET']}
-Number of unique visited cells: {CONSOLE_COLOR['GREEN']}{unique_cells}/{total_cells}{CONSOLE_COLOR['RESET']}
-Percentage of Discovering: {CONSOLE_COLOR['GREEN']}{percentage_discovered:.2f}%{CONSOLE_COLOR['RESET']}
+[MAP INFORMATION]
+ > Number of visited cells: {CONSOLE_COLOR['YELLOW']}{self.get_visited_cell_count()}{CONSOLE_COLOR['RESET']}
+ > Number of unique visited cells: {CONSOLE_COLOR['GREEN']}{unique_cells}/{total_cells}{CONSOLE_COLOR['RESET']}
+ > Percentage of Discovering: {CONSOLE_COLOR['GREEN']}{percentage_discovered:.2f}%{CONSOLE_COLOR['RESET']}
+ > Ration of effecient discovering (total visited / unique cell discovered): {ration_unique_vs_visited}
+
+[COMM-LINK WITH OTHER]
+ > Nuber of BROADCAST_MSG send : {self.internal_agent_broadcast_stat['nb_send']}
+ > Nuber of BROADCAST_MSG receive : {self.internal_agent_broadcast_stat['nb_receive']}
+ > Box coord. found by other ? : {self.internal_agent_broadcast_stat['box_coord_found_by_other']}
+ > Key coord. found by other ? : {self.internal_agent_broadcast_stat['key_coord_found_by_other']}
     """)
 
     def periodic_display(self):
@@ -729,6 +755,7 @@ if __name__ == "__main__":
     if args.run == "autonomous":
         agent.navigate_to_points()
         agent.communicate_completed_mission()
+        agent.display_robot_stat()
     else:
         try:
             while True:
