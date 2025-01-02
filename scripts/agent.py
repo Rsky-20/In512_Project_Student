@@ -212,6 +212,22 @@ class Agent:
         Navigate through the given path, execute associated commands, and update the lists.
         """
         while self.nav_state["nav_state"] != 'mission_completed':
+            
+            self.handle_discovery()
+            
+            if self.nav_state["key"]["has_key"] and self.nav_state["box"]["coord"] != (None, None) and self.nav_state["box"]["box_unlocked"] == False:
+                self.nav_state["nav_state"] = 'moving_to_box'
+                self.move_to_coordinates(self.nav_state["box"]["coord"][0],self.nav_state["box"]["coord"][1])
+                
+                if self.verbose:
+                    print(f"{CONSOLE_COLOR['CYAN']}[BEHAVIOR>'navigate_to_points']{CONSOLE_COLOR['RESET']} - Moving directly to open the box ({self.x}, {self.y}) -> {self.nav_state["box"]["coord"]}.{CONSOLE_COLOR['RESET']}")
+            
+            if self.nav_state["nav_state"] == 'moving_to_key':
+                self.move_to_coordinates(self.nav_state["key"]["coord"][0],self.nav_state["key"]["coord"][1])
+                if self.verbose:
+                    print(f"{CONSOLE_COLOR['CYAN']}[BEHAVIOR>'navigate_to_points']{CONSOLE_COLOR['RESET']} - Moving directly to open the box ({self.x}, {self.y}) -> {self.nav_state["box"]["coord"]}.{CONSOLE_COLOR['RESET']}")
+        
+            
             if not self.points_of_interest:
                 self.points_of_interest = self.get_random_interest_points()
                 self.points_of_interest = self.determine_order(self.points_of_interest, (self.x, self.y))
@@ -233,21 +249,13 @@ class Agent:
                     command = self.orders.pop(0)
                     self.nav_state["last_direction"] = command
                     self.nav_state["last_coord"] = (self.x, self.y)
+                    self.path.pop(0)
                     self.move(command)
-                    self.x, self.y = self.path.pop(0)
                     cell_type, _ = self.get_data()
                     self.visit_cell((self.x, self.y))
-
-                    if self.nav_state["key"]["has_key"] and self.nav_state["box"]["coord"] != (None, None) and self.nav_state["box"]["box_unlocked"] == False:
-                        self.nav_state["nav_state"] = 'moving_to_box'
-                        self.move_to_coordinates(self.nav_state["box"]["coord"][0],self.nav_state["box"]["coord"][1])
-                        self.orders = []
-                        self.path = []
-                        break
                     
                     if self.nav_state["key"]["coord"] != (None, None) and self.nav_state["key"]["has_key"] == False:
                         self.nav_state["nav_state"] = 'moving_to_key'
-                        self.move_to_coordinates(self.nav_state["key"]["coord"][0],self.nav_state["key"]["coord"][1])
                         self.orders = []
                         self.path = []
                         break
@@ -276,94 +284,27 @@ class Agent:
 
                     sleep(0.1)
 
-            if self.nav_state["nav_state"] == 'moving_to_box':
-                if self.verbose:
-                    print(f"{CONSOLE_COLOR['CYAN']}[BEHAVIOR>'navigate_to_points']{CONSOLE_COLOR['RESET']} - Moving directly to open the box ({self.x}, {self.y}) -> {self.nav_state["box"]["coord"]}.{CONSOLE_COLOR['RESET']}")
-            if self.nav_state["nav_state"] == 'moving_to_key':
-                if self.verbose:
-                    print(f"{CONSOLE_COLOR['CYAN']}[BEHAVIOR>'navigate_to_points']{CONSOLE_COLOR['RESET']} - Moving directly to open the box ({self.x}, {self.y}) -> {self.nav_state["box"]["coord"]}.{CONSOLE_COLOR['RESET']}")
-        
+            
         print(f"{CONSOLE_COLOR['GREEN']}[INFO>'navigate_to_points'] - Stopping navigation process.{CONSOLE_COLOR['RESET']}")
+
 
     def move_to_coordinates(self, target_x, target_y):
         """
-        Déplace le robot vers les coordonnées cibles (target_x, target_y).
-        Si un obstacle est rencontré, le robot recule, effectue un déplacement
-        latéral de 3 cases, puis relance la fonction à partir du nouveau point.
+        Déplace le robot vers les coordonnées cibles (target_x, target_y) en utilisant
+        une logique cohérente avec calculate_euclidean_distance et determine_order.
         """
-        def is_within_bounds(x, y):
-            """Vérifie si les coordonnées sont dans les limites de la carte."""
-            return 0 <= x < self.w and 0 <= y < self.h
-
-        if self.verbose:
-            print(f"{CONSOLE_COLOR['CYAN']}[BEHAVIOR>'move_to_coordinates']{CONSOLE_COLOR['RESET']} - Starting navigation to ({target_x}, {target_y}).")
-
-        while (self.x, self.y) != (target_x, target_y):
-            dx = target_x - self.x
-            dy = target_y - self.y
-
-            # Détermine la direction principale à prendre
-            if dx > 0 and dy > 0:
-                direction = DOWN_RIGHT
-            elif dx > 0 and dy < 0:
-                direction = DOWN_LEFT
-            elif dx < 0 and dy > 0:
-                direction = UP_RIGHT
-            elif dx < 0 and dy < 0:
-                direction = UP_LEFT
-            elif dx > 0:
-                direction = DOWN
-            elif dx < 0:
-                direction = UP
-            elif dy > 0:
-                direction = RIGHT
-            elif dy < 0:
-                direction = LEFT
-
-            # Tente de se déplacer dans la direction choisie
-            self.move(direction)
-            cell_type, _ = self.get_data()
-
-            # Vérifie si un obstacle est rencontré
-            if cell_type == "OBSTACLE_NEIGHBOR":
-                if self.verbose:
-                    print(f"{CONSOLE_COLOR['YELLOW']}[WARNING>'move_to_coordinates'] - Obstacle detected at ({self.x}, {self.y}). Changing path.{CONSOLE_COLOR['RESET']}")
-                # Reculer d'une case dans la direction opposée
-                reverse_direction = OPPOSITE_DIRECTION_INDEX[direction]
-                self.move(reverse_direction)
-                sleep(0.1)  # Pause pour éviter la collision
-
-                # Déplacement latéral de 3 cases
-                lateral_direction = (direction + 2) % 8  # Direction perpendiculaire
-                for _ in range(3):
-                    lateral_dx, lateral_dy = DIRECTION_MAP[lateral_direction]
-                    new_x, new_y = self.x + lateral_dx, self.y + lateral_dy
-
-                    if is_within_bounds(new_x, new_y):
-                        self.move(lateral_direction)
-                        cell_type, _ = self.get_data()
-                        if cell_type != "OBSTACLE_NEIGHBOR":
-                            self.x, self.y = new_x, new_y
-                            break
-                    else:
-                        if self.verbose:
-                            print(f"{CONSOLE_COLOR['YELLOW']}[WARNING>'move_to_coordinates'] - Cannot move further laterally. Stuck near ({self.x}, {self.y}).{CONSOLE_COLOR['RESET']}")
-                        break
-
-                # Relance la navigation depuis la nouvelle position
-                if self.verbose:
-                    print(f"{CONSOLE_COLOR['CYAN']}[BEHAVIOR>'move_to_coordinates']{CONSOLE_COLOR['RESET']} - Retrying navigation from ({self.x}, {self.y}).")
-                continue
-
-            # Mise à jour des coordonnées locales après mouvement
-            self.x, self.y = self.x + DIRECTION_MAP[direction][0], self.y + DIRECTION_MAP[direction][1]
-            if self.verbose:
-                print(f"{CONSOLE_COLOR['GREEN']}[INFO>'move_to_coordinates']{CONSOLE_COLOR['RESET']} - Moved to ({self.x}, {self.y}). Continuing to ({target_x}, {target_y}).")
-
-        if self.verbose:
-            print(f"{CONSOLE_COLOR['GREEN']}[INFO>'move_to_coordinates']{CONSOLE_COLOR['RESET']} - Successfully reached ({target_x}, {target_y}).")
-
-
+                
+        self.orders, self.path = self.generate_commands((self.x, self.y), (target_x, target_y))
+        while self.orders:
+            command = self.orders.pop(0)
+            self.nav_state["last_direction"] = command
+            self.nav_state["last_coord"] = (self.x, self.y)
+            self.path.pop(0)
+            self.move(command)
+            self.visit_cell((self.x, self.y))
+            sleep(0.1)
+        
+        
 
     def avoid_obstacle(self):
         """
@@ -469,23 +410,42 @@ class Agent:
                 if not self.nav_state["key"]["has_key"] and item_type == KEY_TYPE:
                     if self.verbose:
                         print(f"{CONSOLE_COLOR['CYAN']}[BEHAVIOR>'handle_discovery']{CONSOLE_COLOR['RESET']} Key picked up! We take it...")
-                    self.nav_state["key"] = {"coord": discovered_coord, "has_key": True}
-                    
-                if not self.nav_state["box"]["box_unlocked"] and item_type == BOX_TYPE:
-                    if self.verbose:
-                        print(f"{CONSOLE_COLOR['CYAN']}[BEHAVIOR>'handle_discovery']{CONSOLE_COLOR['RESET']} - Box found! Unlocking...")
-                    self.nav_state["box"] = {"coord": discovered_coord, "box_unlocked": True}
-                    if self.nav_state["key"]["has_key"] and self.nav_state["box"]["box_unlocked"]:
+                    self.nav_state["key"]["coord"] = discovered_coord
+                    self.nav_state["key"]["has_key"] = True
+                    if self.nav_state["box"]["coord"] == (None, None):
+                        # Décalage après découverte
                         if self.verbose:
-                            print(f"{CONSOLE_COLOR['GREEN']}[INFO>'handle_discovery']{CONSOLE_COLOR['RESET']} - Mission completed!")
-                        self.nav_state["nav_state"] = 'mission_completed'
-                        self.end_date_time = datetime.now()
+                            print(f"{CONSOLE_COLOR['CYAN']}[BEHAVIOR>'handle_discovery']{CONSOLE_COLOR['RESET']} - Shifting 3 cells after discovery to avoid cycles.")
+                        self.shift_position(3)
+                    else:
+                        self.nav_state["nav_state"] = 'moving_to_box'
+                    
+                if self.nav_state["box"]["coord"] == (None, None) and item_type == BOX_TYPE:
+                    if self.verbose:
+                        print(f"{CONSOLE_COLOR['CYAN']}[BEHAVIOR>'handle_discovery']{CONSOLE_COLOR['RESET']} - Box found! We save coordinate in case ...")
+                    self.nav_state["box"]["coord"] = discovered_coord
+                    
+                if not self.nav_state["key"]["has_key"]:
+                    # Décalage après découverte
+                    if self.verbose:
+                        print(f"{CONSOLE_COLOR['CYAN']}[BEHAVIOR>'handle_discovery']{CONSOLE_COLOR['RESET']} - Shifting 3 cells after discovery to avoid cycles.")
+                    self.shift_position(3)
+                
+                if self.nav_state["key"]["has_key"] and self.nav_state["box"]["box_unlocked"] == False and self.nav_state["box"]["coord"] != (None, None) and item_type == BOX_TYPE:
+                    self.nav_state["box"]["box_unlocked"] = True
+                    if self.verbose:
+                        print(f"{CONSOLE_COLOR['CYAN']}[BEHAVIOR>'handle_discovery']{CONSOLE_COLOR['RESET']} - Box found & has Key ! Unboxing ...")
                         
-
-            # Décalage après découverte
-            if self.verbose:
-                print(f"{CONSOLE_COLOR['CYAN']}[BEHAVIOR>'handle_discovery']{CONSOLE_COLOR['RESET']} - Shifting 3 cells after discovery to avoid cycles.")
-            self.shift_position(3)
+                    print(f"{CONSOLE_COLOR['GREEN']}[INFO>'handle_discovery']{CONSOLE_COLOR['RESET']} - Mission completed!")
+                    self.nav_state["nav_state"] = 'mission_completed'
+                    self.end_date_time = datetime.now()
+                    
+            else: 
+                if self.verbose:
+                    print(f"{CONSOLE_COLOR['CYAN']}[BEHAVIOR>'handle_discovery']{CONSOLE_COLOR['RESET']} - Shifting 3 cells after discovery to avoid cycles.")
+                    self.shift_position(3)
+                
+            
 
     def handle_broadcast_message(self, msg):
         """
@@ -519,7 +479,6 @@ class Agent:
         """
         # Revenir en mode navigation
         if self.nav_state["nav_state"] != 'mission_completed':
-            
             directions = list(DIRECTION.keys())  # Toutes les directions possibles
             direction = random.choice(directions)  # Choisit une direction aléatoire
             for _ in range(shift_distance):
@@ -530,7 +489,6 @@ class Agent:
                 if self.verbose:
                     print(f"{CONSOLE_COLOR['GREEN']}[INFO>'shift_position']{CONSOLE_COLOR['RESET']}Shifted randomly to ({self.x}, {self.y}) in direction {DIRECTION[direction]}.")
 
-            
             self.nav_state["nav_state"] = 'nav'
             if self.verbose:
                 print(f"{CONSOLE_COLOR['CYAN']}[BEHAVIOR>'shift_position']{CONSOLE_COLOR['RESET']} - Shift completed. Returning to navigation mode.")
@@ -715,6 +673,8 @@ Discovering Time: {CONSOLE_COLOR['GREEN']}{elapsed_seconds:.2f} seconds{CONSOLE_
 
 Navigation status:
 {CONSOLE_COLOR['BLUE']}{self.nav_state}{CONSOLE_COLOR['RESET']}
+
+Robot coord : ({self.x}, {self.y})
 
 Number of visited cells: {CONSOLE_COLOR['YELLOW']}{self.get_visited_cell_count()}{CONSOLE_COLOR['RESET']}
 Number of unique visited cells: {CONSOLE_COLOR['GREEN']}{unique_cells}/{total_cells}{CONSOLE_COLOR['RESET']}
