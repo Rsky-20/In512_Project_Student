@@ -66,7 +66,7 @@ class Server:
             while True:
                 msg = pickle.loads(conn.recv(1024))
                 if msg["header"] == BROADCAST_MSG:
-                    msg["sender"] = client_id
+                    msg["sender"] = GAME_ID
                     if "nav_state" in msg and msg["nav_state"] == COMPLETED:
                         self.agent_state[client_id] = 0
                     self.send_to_all(conn, msg)

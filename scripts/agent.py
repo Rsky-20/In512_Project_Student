@@ -13,8 +13,7 @@ from time import sleep, time
 import random
 import math
 from datetime import datetime
-
-
+import traceback
 
 class Agent:
     """ Class that implements the behaviour of each agent based on their perception and communication with other agents """
@@ -34,6 +33,7 @@ class Agent:
                             },
                             "visited_cell_count":0
                         }
+        self.internal_agent_broadcast_stat = {"nb_send":0, "nb_receive":0, "box_coord_found_by_other":False, "key_coord_found_by_other":False}
         self.forbidden_cells = set()
 
         # DO NOT TOUCH THE FOLLOWING INSTRUCTIONS
@@ -54,6 +54,7 @@ class Agent:
         cell_val = env_conf["cell_val"]  # value of the cell the agent is located in
         Thread(target=self.msg_cb, daemon=True).start()
         self.wait_for_connected_agent()
+        print(f"{CONSOLE_COLOR['YELLOW']}[WARNING>'__init__'] - Name: Agent_{self.agent_id}{CONSOLE_COLOR['RESET']}")
 
         sleep(5)
         
@@ -61,7 +62,6 @@ class Agent:
         self.end_date_time = None
         self.last_display_time = datetime.now()  # Dernière fois que l'affichage a été mis à jour
         self.points_of_interest = []            
-        self.internal_agent_broadcast_stat = {"nb_send":0, "nb_receive":0, "box_coord_found_by_other":False, "key_coord_found_by_other":False}
         
 
     def msg_cb(self):
@@ -85,14 +85,17 @@ class Agent:
             except EOFError:
                 if self.verbose:
                     print(f"{CONSOLE_COLOR['RED']}[ERROR>'msg_cb'] - Connection closed by peer (EOFError).{CONSOLE_COLOR['RESET']}")
+                    traceback.print_exc()
                 break
             except ConnectionResetError:
                 if self.verbose:
                     print(f"{CONSOLE_COLOR['RED']}[ERROR>'msg_cb'] - Connection reset by peer.{CONSOLE_COLOR['RESET']}")
+                    traceback.print_exc()
                 break
             except Exception as e:
                 if self.verbose:
                     print(f"{CONSOLE_COLOR['RED']}[ERROR>'msg_cb'] - {e}{CONSOLE_COLOR['RESET']}")
+                    traceback.print_exc()
                 break
 
 
@@ -357,6 +360,7 @@ class Agent:
             print(f"{CONSOLE_COLOR['CYAN']}[BEHAVIOR>'hot_cold_search']{CONSOLE_COLOR['RESET']} - Hot/Cold search initiated.{CONSOLE_COLOR['RESET']}")
 
         while True:
+            sleep(0.2)
             _, current_cell_value = self.get_data()  # Obtenez les données de la cellule actuelle
             max_value = current_cell_value  # Initialisez la valeur max avec la valeur actuelle
             original_x, original_y = self.x, self.y  # Stockez la position actuelle
@@ -406,18 +410,19 @@ class Agent:
             owner, item_type = self.get_owner()
             
             if item_type == KEY_TYPE:
-                self.communicate_discovery(KEY_TYPE, *discovered_coord)
+                self.communicate_discovery(KEY_TYPE, owner, *discovered_coord)
             elif item_type == BOX_TYPE:
-                self.communicate_discovery(BOX_TYPE, *discovered_coord)
-
-            # Ajouter la cellule et ses voisines dans forbidden_cells
-            for dx in range(-1, 2):  # Cases voisines (-1, 0, +1)
-                for dy in range(-1, 2):
-                    forbidden_x, forbidden_y = discovered_coord[0] + dx, discovered_coord[1] + dy
-                    if 0 <= forbidden_x < self.w and 0 <= forbidden_y < self.h:
-                        self.forbidden_cells.add((forbidden_x, forbidden_y))
+                self.communicate_discovery(BOX_TYPE, owner, *discovered_coord)
 
             if owner == self.agent_id:
+                
+                # Ajouter la cellule et ses voisines dans forbidden_cells
+                for dx in range(-1, 2):  # Cases voisines (-1, 0, +1)
+                    for dy in range(-1, 2):
+                        forbidden_x, forbidden_y = discovered_coord[0] + dx, discovered_coord[1] + dy
+                        if 0 <= forbidden_x < self.w and 0 <= forbidden_y < self.h:
+                            self.forbidden_cells.add((forbidden_x, forbidden_y))
+                
                 # Mise à jour de l'état après découverte
                 if not self.nav_state["key"]["has_key"] and item_type == KEY_TYPE:
                     if self.verbose:
@@ -469,19 +474,20 @@ class Agent:
             owner = msg.get("owner")  # Propriétaire de l'élément découvert
             self.internal_agent_broadcast_stat['nb_receive']+=1
 
-            if discovery_type == KEY_TYPE and owner == self.agent_id:
-                # Met à jour les coordonnées de la clé si elle appartient à cet agent
-                self.nav_state["key"]["coord"] = position
-                self.internal_agent_broadcast_stat['key_coord_found_by_other'] = True
-                if self.verbose:
-                    print(f"{CONSOLE_COLOR['GREEN']}[INFO>'handle_broadcast_message']{CONSOLE_COLOR['RESET']} - Updated key position to {position} for agent {self.agent_id}.")
+            if owner != None and int(owner) == int(self.agent_id):
+                if int(discovery_type) == KEY_TYPE :
+                    # Met à jour les coordonnées de la clé si elle appartient à cet agent
+                    self.nav_state["key"]["coord"] = position
+                    self.internal_agent_broadcast_stat['key_coord_found_by_other'] = True
+                    if self.verbose:
+                        print(f"{CONSOLE_COLOR['GREEN']}[INFO>'handle_broadcast_message']{CONSOLE_COLOR['RESET']} - Updated key position to {position} for agent {self.agent_id}.")
 
-            elif discovery_type == BOX_TYPE and owner == self.agent_id:
-                # Met à jour les coordonnées de la boîte si elle appartient à cet agent
-                self.nav_state["box"]["coord"] = position
-                self.internal_agent_broadcast_stat['box_coord_found_by_other'] = True
-                if self.verbose:
-                    print(f"{CONSOLE_COLOR['GREEN']}[INFO>'handle_broadcast_message']{CONSOLE_COLOR['RESET']} - Updated box position to {position} for agent {self.agent_id}.")
+                if int(discovery_type) == BOX_TYPE:
+                    # Met à jour les coordonnées de la boîte si elle appartient à cet agent
+                    self.nav_state["box"]["coord"] = position
+                    self.internal_agent_broadcast_stat['box_coord_found_by_other'] = True
+                    if self.verbose:
+                        print(f"{CONSOLE_COLOR['GREEN']}[INFO>'handle_broadcast_message']{CONSOLE_COLOR['RESET']} - Updated box position to {position} for agent {self.agent_id}.")
 
             else:
                 if self.verbose:
@@ -509,7 +515,7 @@ class Agent:
                 print(f"{CONSOLE_COLOR['CYAN']}[BEHAVIOR>'shift_position']{CONSOLE_COLOR['RESET']} - Shift completed. Returning to navigation mode.")
        
 
-    def communicate_discovery(self, discovery_type, x, y):
+    def communicate_discovery(self, discovery_type, owner, x, y):
         """
         Envoie un message de découverte à tous les agents via le serveur.
         Gère les erreurs réseau et vérifie l'état de la connexion avant l'envoi.
@@ -524,7 +530,7 @@ class Agent:
             "header": BROADCAST_MSG,
             "type": discovery_type,
             "position": (x, y),
-            "owner": self.agent_id
+            "owner": owner
         }
         try:
             # Vérifier si l'agent est encore actif
@@ -534,10 +540,11 @@ class Agent:
                 return
 
             # Envoi du message
-            self.network.send(msg)
-            self.internal_agent_broadcast_stat['nb_send']+=1
-            if self.verbose:
-                print(f"{CONSOLE_COLOR['MAGENTA']}[BROADCAST>'communicate_discovery'] - {msg}{CONSOLE_COLOR['RESET']}")
+            if owner != self.agent_id:
+                self.network.send(msg)
+                self.internal_agent_broadcast_stat['nb_send']+=1
+                if self.verbose:
+                    print(f"{CONSOLE_COLOR['MAGENTA']}[BROADCAST>'communicate_discovery'] - {msg}{CONSOLE_COLOR['RESET']}")
 
             # Ajout d'un délai pour éviter la surcharge réseau
             sleep(0.1)
@@ -546,15 +553,18 @@ class Agent:
             self.running = False
             if self.verbose:
                 print(f"{CONSOLE_COLOR['RED']}[ERROR>'communicate_discovery'] - Connection reset by server.{CONSOLE_COLOR['RESET']}")
+                traceback.print_exc()
 
         except BrokenPipeError:
             self.running = False
             if self.verbose:
                 print(f"{CONSOLE_COLOR['RED']}[ERROR>'communicate_discovery'] - Broken pipe. Server may be down.{CONSOLE_COLOR['RESET']}")
+                traceback.print_exc()
 
         except Exception as e:
             if self.verbose:
                 print(f"{CONSOLE_COLOR['RED']}[ERROR>'communicate_discovery'] - Unexpected error: {e}{CONSOLE_COLOR['RESET']}")
+                traceback.print_exc()
 
 
     def communicate_completed_mission(self):
@@ -663,6 +673,7 @@ class Agent:
         except Exception as e:
             if self.verbose:
                 print(f"{CONSOLE_COLOR['RED']}[ERROR>'get_owner'] - {e}{CONSOLE_COLOR['RESET']}")
+                traceback.print_exc()
             return "UNKNOWN", -1.0  # Retour en cas d'erreur
 
         
@@ -769,6 +780,7 @@ if __name__ == "__main__":
                 agent.network.send(cmds)
         except KeyboardInterrupt:
             # Appeler stop() pour arrêter proprement les threads
+            traceback.print_exc()
             pass
     agent.stop()
     print("Program terminated.")
