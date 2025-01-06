@@ -134,16 +134,27 @@ def create_gui():
             server_button.grid_remove()
             agent_count_spinbox.config(state="normal")
             map_spinbox.config(state="disabled")
+            verbose_combobox.config(state="normal")
+            mode_combobox.config(state="normal")
+            display_info_combobox.config(state="normal")
+            
         elif mode == "Server Only":
-            server_address_entry.config(state="disabled")
-            server_button.grid(row=6, column=1, padx=5, pady=5)
+            server_address_entry.config(state="normal")
+            server_button.grid(row=7, column=1, padx=5, pady=5)
             agent_count_spinbox.config(state="normal")
             map_spinbox.config(state="normal")
+            verbose_combobox.config(state="disabled")
+            mode_combobox.config(state="disabled")
+            display_info_combobox.config(state="disabled")
+            
         elif mode == "Client-Server":
             server_address_entry.config(state="normal")
-            server_button.grid(row=6, column=1, padx=5, pady=5)
+            server_button.grid(row=7, column=1, padx=5, pady=5)
             agent_count_spinbox.config(state="normal")
             map_spinbox.config(state="normal")
+            verbose_combobox.config(state="normal")
+            mode_combobox.config(state="normal")
+            display_info_combobox.config(state="normal")
 
     def toggle_server():
         global server_running
