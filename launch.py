@@ -17,16 +17,34 @@ open_processes = []  # Liste des processus ouverts
 
 # Fonction pour exécuter une commande dans une console distincte et stocker le processus
 def run_in_console(command):
-    process = subprocess.Popen(
-        f'start cmd.exe /K "{command}"',  # Ouvre directement CMD avec la commande
-        stdin=subprocess.PIPE,
-        shell=True,
-        creationflags=subprocess.CREATE_NEW_PROCESS_GROUP  # Crée un nouveau groupe de processus
-    )
-    open_processes.append(process.pid)
+    system_platform = platform.system()
+    try:
+        if system_platform == "Windows":
+            # Commande pour Windows (ouvre dans cmd)
+            process = subprocess.Popen(
+                f'start cmd.exe /K "{command}"',
+                stdin=subprocess.PIPE,
+                shell=True,
+                creationflags=subprocess.CREATE_NEW_PROCESS_GROUP
+            )
+        elif system_platform == "Linux":
+            # Commande pour Linux (ouvre dans un terminal gnome-terminal ou xterm)
+            process = subprocess.Popen(
+                ["gnome-terminal", "--", "bash", "-c", f"{command}; exec bash"]  # Pour GNOME Terminal
+                if os.environ.get("XDG_CURRENT_DESKTOP") == "GNOME"
+                else ["xterm", "-e", f"{command}; exec bash"],  # Alternative pour xterm
+                stdin=subprocess.PIPE,
+                shell=False
+            )
+        else:
+            raise OSError(f"Système d'exploitation non pris en charge : {system_platform}")
+        open_processes.append(process)
+    except FileNotFoundError as e:
+        print(f"Erreur : {e}")
+        messagebox.showerror("Erreur", f"Terminal non trouvé pour le système {system_platform}. Vérifiez votre configuration.")
 
 # Fonction pour arrêter tous les processus
-def close_all_processes(validate_button, server_button, param_widgets):
+def close_all_processes(validate_button, server_button, open_processes):
     global server_running
     if open_processes:
         processes_to_remove = []
@@ -34,7 +52,7 @@ def close_all_processes(validate_button, server_button, param_widgets):
             try:
                 # Vérifie si le processus est toujours actif
                 if process.poll() is None:  # Si le processus est encore actif
-                    process.kill()  # Tente de terminer le processus proprement
+                    process.terminate()  # Tente de terminer le processus proprement
                     process.wait(timeout=5)  # Attendre jusqu'à 5 secondes que le processus se termine
                 processes_to_remove.append(process)
             except Exception as e:
@@ -54,7 +72,7 @@ def close_all_processes(validate_button, server_button, param_widgets):
     
     # Réinitialise l'état du serveur
     server_running = False
-    reset_ui(validate_button, server_button, param_widgets)
+    reset_ui(validate_button, server_button)
 
 
 # Fonction pour réinitialiser l'interface utilisateur
