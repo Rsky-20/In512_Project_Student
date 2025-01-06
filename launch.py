@@ -115,15 +115,22 @@ def create_gui():
 
     def validate_config():
         global number_of_agents
+        mode = config_mode_var.get()
         try:
             number_of_agents = int(agent_count_spinbox.get())
             validate_button.config(state=tk.DISABLED)
-            if server_address_entry.get() == "127.0.0.1":
+
+            if mode == "Client Only":
+                server_button.config(state=tk.DISABLED)
+            elif mode == "Server Only" or mode == "Client-Server":
                 server_button.config(state=tk.NORMAL)
+
             # Bloque les widgets après validation
             for widget in param_widgets:
                 widget.config(state=tk.DISABLED)
-            add_agent_buttons()
+
+            if mode != "Server Only":
+                add_agent_buttons()
         except ValueError:
             messagebox.showerror("Erreur", "Veuillez entrer un nombre valide pour les agents.")
 
@@ -137,7 +144,7 @@ def create_gui():
             verbose_combobox.config(state="normal")
             mode_combobox.config(state="normal")
             display_info_combobox.config(state="normal")
-            
+
         elif mode == "Server Only":
             server_address_entry.config(state="normal")
             server_button.grid(row=7, column=1, padx=5, pady=5)
@@ -146,7 +153,7 @@ def create_gui():
             verbose_combobox.config(state="disabled")
             mode_combobox.config(state="disabled")
             display_info_combobox.config(state="disabled")
-            
+
         elif mode == "Client-Server":
             server_address_entry.config(state="normal")
             server_button.grid(row=7, column=1, padx=5, pady=5)
@@ -167,7 +174,7 @@ def create_gui():
         server_running = True
 
     def toggle_agent(agent_index):
-        if not server_running:
+        if not server_running and config_mode_var.get() == 'Client-Server':
             messagebox.showerror("Erreur", "Le serveur doit être démarré avant de lancer les agents.")
             return
         agent_button = agent_buttons[agent_index]
