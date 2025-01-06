@@ -2,6 +2,7 @@ import os
 import subprocess
 import tkinter as tk
 from tkinter import ttk, messagebox
+import platform
 
 # Répertoire des logs
 LOG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "log")
@@ -25,7 +26,7 @@ def run_in_console(command):
     open_processes.append(process.pid)
 
 # Fonction pour arrêter tous les processus
-def close_all_processes(validate_button, server_button, open_processes):
+def close_all_processes(validate_button, server_button, param_widgets):
     global server_running
     if open_processes:
         processes_to_remove = []
@@ -53,13 +54,15 @@ def close_all_processes(validate_button, server_button, open_processes):
     
     # Réinitialise l'état du serveur
     server_running = False
-    reset_ui(validate_button, server_button)
+    reset_ui(validate_button, server_button, param_widgets)
 
 
 # Fonction pour réinitialiser l'interface utilisateur
-def reset_ui(validate_button, server_button):
+def reset_ui(validate_button, server_button, param_widgets):
     validate_button.config(state=tk.NORMAL)
     server_button.config(state=tk.DISABLED, text="Démarrer le Serveur", bg="gray")
+    for widget in param_widgets:
+        widget.config(state=tk.NORMAL)
     for button in agent_buttons:
         button.destroy()
     agent_buttons.clear()
@@ -72,44 +75,75 @@ def create_gui():
     root.geometry("600x500")
 
     # Widgets pour les configurations
-    ttk.Label(root, text="Adresse du serveur:").grid(row=0, column=0, sticky=tk.W, padx=5, pady=5)
+    ttk.Label(root, text="Mode de configuration:").grid(row=0, column=0, sticky=tk.W, padx=5, pady=5)
+    config_mode_var = tk.StringVar(value="Client-Server")
+    config_combobox = ttk.Combobox(root, textvariable=config_mode_var, values=["Client Only", "Server Only", "Client-Server"], state="readonly")
+    config_combobox.grid(row=0, column=1, padx=5, pady=5)
+
+    ttk.Label(root, text="Adresse du serveur:").grid(row=1, column=0, sticky=tk.W, padx=5, pady=5)
     server_address_entry = ttk.Entry(root)
     server_address_entry.insert(0, "127.0.0.1")
-    server_address_entry.grid(row=0, column=1, padx=5, pady=5)
+    server_address_entry.grid(row=1, column=1, padx=5, pady=5)
 
-    ttk.Label(root, text="Nombre d'agents:").grid(row=1, column=0, sticky=tk.W, padx=5, pady=5)
+    ttk.Label(root, text="Nombre d'agents:").grid(row=2, column=0, sticky=tk.W, padx=5, pady=5)
     agent_count_spinbox = ttk.Spinbox(root, from_=1, to=4, width=5)
-    agent_count_spinbox.grid(row=1, column=1, padx=5, pady=5)
+    agent_count_spinbox.grid(row=2, column=1, padx=5, pady=5)
 
-    ttk.Label(root, text="Carte à utiliser:").grid(row=2, column=0, sticky=tk.W, padx=5, pady=5)
+    ttk.Label(root, text="Carte à utiliser:").grid(row=3, column=0, sticky=tk.W, padx=5, pady=5)
     map_spinbox = ttk.Spinbox(root, from_=1, to=3, width=5)
-    map_spinbox.grid(row=2, column=1, padx=5, pady=5)
+    map_spinbox.grid(row=3, column=1, padx=5, pady=5)
 
-    # Remplacement des checkbuttons par des comboboxes
-    ttk.Label(root, text="Verbose:").grid(row=3, column=0, sticky=tk.W, padx=5, pady=5)
+    ttk.Label(root, text="Verbose:").grid(row=4, column=0, sticky=tk.W, padx=5, pady=5)
     verbose_var = tk.StringVar(value="true")
     verbose_combobox = ttk.Combobox(root, textvariable=verbose_var, values=["true", "false"], state="readonly")
-    verbose_combobox.grid(row=3, column=1, padx=5, pady=5)
+    verbose_combobox.grid(row=4, column=1, padx=5, pady=5)
 
-    ttk.Label(root, text="Mode:").grid(row=4, column=0, sticky=tk.W, padx=5, pady=5)
+    ttk.Label(root, text="Mode:").grid(row=5, column=0, sticky=tk.W, padx=5, pady=5)
     mode_var = tk.StringVar(value="autonomous")
     mode_combobox = ttk.Combobox(root, textvariable=mode_var, values=["autonomous", "manual"], state="readonly")
-    mode_combobox.grid(row=4, column=1, padx=5, pady=5)
+    mode_combobox.grid(row=5, column=1, padx=5, pady=5)
 
-    ttk.Label(root, text="Afficher infos agents:").grid(row=5, column=0, sticky=tk.W, padx=5, pady=5)
+    ttk.Label(root, text="Afficher infos agents:").grid(row=6, column=0, sticky=tk.W, padx=5, pady=5)
     display_info_var = tk.StringVar(value="true")
     display_info_combobox = ttk.Combobox(root, textvariable=display_info_var, values=["true", "false"], state="readonly")
-    display_info_combobox.grid(row=5, column=1, padx=5, pady=5)
+    display_info_combobox.grid(row=6, column=1, padx=5, pady=5)
+
+    param_widgets = [
+        server_address_entry, agent_count_spinbox, map_spinbox,
+        verbose_combobox, mode_combobox, display_info_combobox
+    ]
 
     def validate_config():
         global number_of_agents
         try:
             number_of_agents = int(agent_count_spinbox.get())
             validate_button.config(state=tk.DISABLED)
-            server_button.config(state=tk.NORMAL)
+            if server_address_entry.get() == "127.0.0.1":
+                server_button.config(state=tk.NORMAL)
+            # Bloque les widgets après validation
+            for widget in param_widgets:
+                widget.config(state=tk.DISABLED)
             add_agent_buttons()
         except ValueError:
             messagebox.showerror("Erreur", "Veuillez entrer un nombre valide pour les agents.")
+
+    def update_ui():
+        mode = config_mode_var.get()
+        if mode == "Client Only":
+            server_address_entry.config(state="normal")
+            server_button.grid_remove()
+            agent_count_spinbox.config(state="normal")
+            map_spinbox.config(state="disabled")
+        elif mode == "Server Only":
+            server_address_entry.config(state="disabled")
+            server_button.grid(row=6, column=1, padx=5, pady=5)
+            agent_count_spinbox.config(state="normal")
+            map_spinbox.config(state="normal")
+        elif mode == "Client-Server":
+            server_address_entry.config(state="normal")
+            server_button.grid(row=6, column=1, padx=5, pady=5)
+            agent_count_spinbox.config(state="normal")
+            map_spinbox.config(state="normal")
 
     def toggle_server():
         global server_running
@@ -131,21 +165,23 @@ def create_gui():
         run_in_console(command)
 
     def close_all():
-        close_all_processes(validate_button, server_button, open_processes)
+        close_all_processes(validate_button, server_button, param_widgets)
 
-    validate_button = ttk.Button(root, text="Valider Configuration", command=validate_config)
-    validate_button.grid(row=6, column=0, padx=5, pady=5)
+    validate_button = ttk.Button(root, text="Valider Paramétrage", command=validate_config)
+    validate_button.grid(row=7, column=0, padx=5, pady=5)
 
     server_button = tk.Button(root, text="Démarrer le Serveur", command=toggle_server, bg="gray", state=tk.DISABLED)
-    server_button.grid(row=6, column=1, padx=5, pady=5)
+    server_button.grid(row=7, column=1, padx=5, pady=5)
 
-    ttk.Button(root, text="Arrêter Tous", command=close_all).grid(row=7, column=0, padx=5, pady=5)
+    ttk.Button(root, text="Arrêter Tous", command=close_all).grid(row=8, column=0, padx=5, pady=5)
 
     def add_agent_buttons():
         for i in range(number_of_agents):
             agent_button = tk.Button(root, text=f"Lancer Agent {i}", command=lambda idx=i: toggle_agent(idx), bg="gray")
-            agent_button.grid(row=8 + i, column=0, padx=5, pady=5)
+            agent_button.grid(row=9 + i, column=0, padx=5, pady=5)
             agent_buttons.append(agent_button)
+
+    config_combobox.bind("<<ComboboxSelected>>", lambda _: update_ui())
 
     root.mainloop()
 
