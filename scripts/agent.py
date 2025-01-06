@@ -691,7 +691,7 @@ class Agent:
         
         # Calcul du pourcentage de découverte
         percentage_discovered = (unique_cells / total_cells) * 100 if total_cells > 0 else 0
-        ration_unique_vs_visited = total_cells/unique_cells
+        ration_unique_vs_visited = 1 - (unique_cells/total_cells)
 
         print(f"""
 {CONSOLE_COLOR['BLUE']}============ Robot Information ============{CONSOLE_COLOR['RESET']}
