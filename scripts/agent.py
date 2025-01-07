@@ -6,35 +6,43 @@ __version__ = "1.0.0"
 
 from network import Network
 from my_constants import *
-
+from random import randint
 from threading import Thread
-import numpy as np
 from time import sleep, time
+from datetime import datetime
+
+import numpy as np
 import random
 import math
-from datetime import datetime
 import traceback
+import argparse
 
 class Agent:
-    """ Class that implements the behaviour of each agent based on their perception and communication with other agents """
+    """ This class implements the behaviour of each agent based on their perception and communication with other agents"""
     def __init__(self, server_ip, verbose):
+        """Initializes the agent with server connection and configurations.
+
+        Args:
+            server_ip (str): IP address of the server.
+            verbose (bool): Verbosity level for debugging information.
+        """
         self.nav_state = {
                             "nav_state": 'nav',
                             "last_direction": None,
                             "last_value": 0.0,
                             "last_coord":(None, None),
                             "key": {
-                                "coord": (None, None),  # Coordonnées de la clé
-                                "has_key": False        # Indique si le robot possède la clé
+                                "coord": (None, None),  # coordonate of the key
+                                "has_key": False        # tells if the robot has the key
                             },
                             "box": {
-                                "coord": (None, None),  # Coordonnées de la boîte
-                                "box_unlocked": False   # Indique si la boîte est déverrouillée
+                                "coord": (None, None),  # coordonate of the box
+                                "box_unlocked": False   # tells if the box is unlocked
                             },
                             "visited_cell_count":0
                         }
         self.internal_agent_broadcast_stat = {"nb_send":0, "nb_receive":0, "box_coord_found_by_other":False, "key_coord_found_by_other":False}
-        self.forbidden_cells = set()
+        self.forbidden_cells = []
 
         # DO NOT TOUCH THE FOLLOWING INSTRUCTIONS
         self.network = Network(server_ip=server_ip)
@@ -60,16 +68,20 @@ class Agent:
         
         self.start_date_time = datetime.now()
         self.end_date_time = None
-        self.last_display_time = datetime.now()  # Dernière fois que l'affichage a été mis à jour
+        self.last_display_time = datetime.now()  # last time that the display was update
         self.points_of_interest = []            
         
 
     def msg_cb(self):
-        """ Method used to handle incoming messages """
+        """Handles incoming messages from the network.
+
+        Args:
+            None
+        """
         while self.running:
             try:
                 data = self.network.receive()
-                if not data:  # Vérifie si des données valides ont été reçues
+                if not data:  # to verify if the valid datas has been recieved.
                     if self.verbose:
                         print(f"{CONSOLE_COLOR['YELLOW']}[WARNING>'msg_cb'] - Received empty data. Connection might be closed.{CONSOLE_COLOR['RESET']}")
                     break
@@ -100,6 +112,11 @@ class Agent:
 
 
     def wait_for_connected_agent(self):
+        """We will wait to have the expected number of agents to be connected before starting the game.
+
+        Args:
+            None
+        """
         self.network.send({"header": GET_NB_AGENTS})
         check_conn_agent = True
         while check_conn_agent:
@@ -110,14 +127,28 @@ class Agent:
     
     
     def calculate_points(self, factor=10):
+        """We calculates the number of interest points based on the grid dimensions.
+
+        Args:
+            factor (int, optional): Factor to adjust the number of points. Defaults to 10.
+
+        Returns:
+            int: Number of calculated points.
+        """
         num_points = math.ceil(self.h / factor) + math.ceil(self.w / factor)
         return num_points
 
 
     def get_random_interest_points(self, factor=10, min_distance=5):
-        """
-        Generate random interest points spread across the grid.
-        Exclude forbidden cells.
+        """Generates random interest points across the grid. It will exclude the forbiden cells and generate it near 
+        to the edges of the map. 
+
+        Args:
+            factor (int, optional): Factor to adjust the density of points. Defaults to 10.
+            min_distance (int, optional): Minimum distance between two points. Defaults to 5.
+
+        Returns:
+            list[tuple[int, int]]: List of generated interest points.
         """
         num_points = self.calculate_points(factor)
         points = []
@@ -150,10 +181,28 @@ class Agent:
 
 
     def calculate_euclidean_distance(self, point1, point2):
+        """Calculates the Euclidean distance between two points.
+
+        Args:
+            point1 (tuple[int, int]): Coordinates of the first point.
+            point2 (tuple[int, int]): Coordinates of the second point.
+
+        Returns:
+            float: Euclidean distance between the two points.
+        """
         return math.sqrt((point1[0] - point2[0])**2 + (point1[1] - point2[1])**2)
 
 
     def determine_order(self, points, start_pos):
+        """Determines the order of points to visit, starting with the farthest one.
+
+        Args:
+            points (list[tuple[int, int]]): List of points to sort.
+            start_pos (tuple[int, int]): Starting position.
+
+        Returns:
+            list[tuple[int, int]]: Sorted list of points to visit.
+        """
         remaining_points = points[:]
         current_pos = start_pos
         ordered_points = []
@@ -171,6 +220,16 @@ class Agent:
 
 
     def generate_commands(self, start_pos, target_pos):
+        """This function will help to generate command to move the robots. This will guide the robot until it reach a
+        target position.
+
+        Args:
+            start_pos (tuple[int, int]): Starting coordinates.
+            target_pos (tuple[int, int]): Target coordinates.
+
+        Returns:
+            tuple[list[int], list[tuple[int, int]]]: Generated commands and path.
+        """
         commands = []
         current_pos = list(start_pos)
         path = [tuple(current_pos)]
@@ -214,6 +273,14 @@ class Agent:
 
 
     def generate_path(self):
+        """Generates a complete path based on interest points.
+
+        Args:
+            None
+
+        Returns:
+            tuple[list[int], list[tuple[int, int]]]: Generated commands and path.
+        """
         all_commands = []
         full_path = []
         current_pos = (self.x, self.y)
@@ -228,8 +295,11 @@ class Agent:
 
 
     def navigate_to_points(self):
-        """
-        Navigate through the given path, execute associated commands, and update the lists.
+        """Navigates to interest points and updates navigation state by Navigate through the given path, execute 
+        associated commands, and update the lists.
+
+        Args:
+            None
         """
         while self.nav_state["nav_state"] != 'mission_completed':
             
@@ -247,6 +317,7 @@ class Agent:
                 if self.verbose:
                     print(f"{CONSOLE_COLOR['CYAN']}[BEHAVIOR>'navigate_to_points']{CONSOLE_COLOR['RESET']} - Moving directly to open the box ({self.x}, {self.y}) -> {self.nav_state["box"]["coord"]}.{CONSOLE_COLOR['RESET']}")
         
+            
             if not self.points_of_interest:
                 self.points_of_interest = self.get_random_interest_points()
                 self.points_of_interest = self.determine_order(self.points_of_interest, (self.x, self.y))
@@ -281,9 +352,11 @@ class Agent:
                     
                     if cell_type == "OBSTACLE_NEIGHBOR":
                         self.avoid_obstacle()
+                        self.orders = []
+                        self.path = []
                         break
 
-                    if cell_type in ["KEY_NEIGHBOR", "KEY_OUTER"] and self.nav_state["key"]["has_key"] == False:
+                    if cell_type in ["KEY_NEIGHBOR", "KEY_OUTER"] and self.nav_state["key"]["has_key"] == False and (self.x, self.y) not in self.forbidden_cells:
                         if self.verbose:
                             print(f"{CONSOLE_COLOR['CYAN']}[BEHAVIOR>'navigate_to_points']{CONSOLE_COLOR['RESET']} - Switching to hot/cold search near ({self.x}, {self.y}).{CONSOLE_COLOR['RESET']}")
                         self.nav_state["nav_state"] = 'hot_cold_search_KEY'
@@ -292,7 +365,7 @@ class Agent:
                         self.path = []
                         break
                     
-                    if cell_type in ["BOX_NEIGHBOR", "BOX_OUTER"] and self.nav_state["box"]["coord"] == (None, None):
+                    if cell_type in ["BOX_NEIGHBOR", "BOX_OUTER"] and self.nav_state["box"]["coord"] == (None, None) and (self.x, self.y) not in self.forbidden_cells:
                         if self.verbose:
                             print(f"{CONSOLE_COLOR['CYAN']}[BEHAVIOR>'navigate_to_points']{CONSOLE_COLOR['RESET']} - Switching to hot/cold search near ({self.x}, {self.y}).{CONSOLE_COLOR['RESET']}")
                         self.nav_state["nav_state"] = 'hot_cold_search_BOX'
@@ -308,64 +381,64 @@ class Agent:
 
 
     def move_to_coordinates(self, target_x, target_y):
+        """Moves the agent to a target position (target_x, target_y) by using an optimized and coherent logic with 
+        calculate_euclidean_distance 
+
+        Args:
+            target_x (int): Target X coordinate.
+            target_y (int): Target Y coordinate.
         """
-        Déplace le robot vers les coordonnées cibles (target_x, target_y) en utilisant
-        une logique cohérente avec calculate_euclidean_distance et determine_order.
-        """
+
                 
         self.orders, self.path = self.generate_commands((self.x, self.y), (target_x, target_y))
         print(self.path)
         print(self.orders)
         is_opposite = False
         while self.orders:
-            cell_type, _ = self.get_data()
-            if cell_type == 'OBSTACLE_NEIGHBOR':
-                self.avoid_obstacle()
-                self.shift_position(4)
-                break
+            command = self.orders.pop(0)
+            self.nav_state["last_direction"] = command
+            self.nav_state["last_coord"] = (self.x, self.y)
+            self.path.pop(0)
+            last_dist = self.calculate_euclidean_distance((self.x, self.y),(target_x, target_y))
+            if is_opposite:
+                self.move(OPPOSITE_DIRECTION_INDEX[command])
             else:
-                command = self.orders.pop(0)
-                self.nav_state["last_direction"] = command
-                self.nav_state["last_coord"] = (self.x, self.y)
-                self.path.pop(0)
-                last_dist = self.calculate_euclidean_distance((self.x, self.y),(target_x, target_y))
-                if is_opposite:
-                    self.move(OPPOSITE_DIRECTION_INDEX[command])
-                else:
-                    self.move(command)
-                new_dist = self.calculate_euclidean_distance((self.x, self.y),(target_x, target_y))
-                self.visit_cell((self.x, self.y))
-                if new_dist>last_dist:
-                    is_opposite = True
+                self.move(command)
+            new_dist = self.calculate_euclidean_distance((self.x, self.y),(target_x, target_y))
+            self.visit_cell((self.x, self.y))
+            if new_dist>last_dist:
+                is_opposite = True
             
-            sleep(0.5)
+            sleep(1)
         
-    
+
     def avoid_obstacle(self):
-        """
-        Handle obstacle by stepping back using directions from DIRECTION and OPPOSITE_DIRECTION_INDEX.
-        Clears the current path after stepping back.
+        """Handles obstacles by stepping back with DIRECTION and OPPOSITE_DIRECTION_INDEX and adjusting the path by
+        clearing it and
+
+        Args:
+            None
         """
         if self.verbose:
             print(f"{CONSOLE_COLOR['YELLOW']}[WARNING>'avoid_obstacle'] - Obstacle detected. Changing path...{CONSOLE_COLOR['RESET']}")
 
-        # Vérification et initialisation de la dernière direction connue
+        # Verification and innitialisation of the last known direction 
         if self.nav_state["last_direction"] is None:
             if self.verbose:
                 print(f"{CONSOLE_COLOR['YELLOW']}[WARNING>'avoid_obstacle'] - No last direction recorded. Cannot step back.{CONSOLE_COLOR['RESET']}")
             return
 
-        # Obtenir la direction opposée
+        # This is to obtain the opposit direction 
         reverse_direction = OPPOSITE_DIRECTION_INDEX[self.nav_state["last_direction"]]
 
-        # Reculer de 2 cases dans la direction opposée
-        for _ in range(2):  # Boucle pour reculer de 2 cases
-            self.move(reverse_direction)  # Utilisation de la direction
-            sleep(0.5)
+        # we go backward by two itterations (2 dirrections)
+        for _ in range(2):  
+            self.move(reverse_direction)  # using the direction 
             if self.verbose:
                 print(f"{CONSOLE_COLOR['CYAN']}[BEHAVIOR>'avoid_obstacle']{CONSOLE_COLOR['RESET']} - Stepped back in direction '{DIRECTION[reverse_direction]}'.")
 
-        # Effacer les ordres et le chemin
+        self.move(CLOCKWISE_DIRECTION_INDEX[reverse_direction])
+        #this is to discard the path and the order
         self.orders = []
         self.path = []
         if self.verbose:
@@ -373,59 +446,61 @@ class Agent:
 
 
     def hot_cold_search(self):
-        """
-        Implement a hot/cold strategy to locate cells with value 1.0.
-        The robot explores neighboring cells and decides the best path based on cell values and types.
+        """Performs a search to locate target cells (key and box) we implement a hot/cold strategy. That mean that the
+        robot explores neighboring cells and decides the best path based on cell values and types.
+
+        Args:
+            None
         """
         if self.verbose:
             print(f"{CONSOLE_COLOR['CYAN']}[BEHAVIOR>'hot_cold_search']{CONSOLE_COLOR['RESET']} - Hot/Cold search initiated.{CONSOLE_COLOR['RESET']}")
 
         while True:
-            sleep(0.5)
-            _, current_cell_value = self.get_data()  # Obtenez les données de la cellule actuelle
-            max_value = current_cell_value  # Initialisez la valeur max avec la valeur actuelle
-            original_x, original_y = self.x, self.y  # Stockez la position actuelle
+            sleep(0.2)
+            _, current_cell_value = self.get_data()  # this is to get the datas of the actual cell
+            max_value = current_cell_value  # initialize the max value by the actual one 
+            original_x, original_y = self.x, self.y  #and stock the actual position 
             if self.verbose:
                 print(f"{CONSOLE_COLOR['CYAN']}[BEHAVIOR>'hot_cold_search']{CONSOLE_COLOR['RESET']} - Current position: ({self.x}, {self.y}), Value: {current_cell_value}.")
 
-            # Explorer toutes les directions
+            #We explore all the direction 
             for direction_index, (dx, dy) in DIRECTION_MAP.items():
                 nx, ny = self.x + dx, self.y + dy
 
-                # Vérifiez les limites de la grille et les cellules visitées
+                # and verify the limits of the grid and visited cells
                 if 0 <= nx < self.w and 0 <= ny < self.h and (nx, ny):
-                    self.move(direction_index)  # Déplacez le robot dans la direction donnée
+                    self.move(direction_index)  # We moove the robot on the given direction 
                     self.visit_cell((self.x, self.y))
                     neighbor_cell_type, neighbor_cell_value = self.get_data()
                     if self.verbose:
                         print(f"{CONSOLE_COLOR['GREEN']}[INFO>'hot_cold_search']{CONSOLE_COLOR['RESET']} - Checked cell ({nx}, {ny}): Type {neighbor_cell_type}, Value {neighbor_cell_value}.")
 
-                    # Si une cellule cible est atteinte
+                    # We check if the cells is the one that we want 
                     if neighbor_cell_value == 1.0:
                         print(f"{CONSOLE_COLOR['GREEN']}[INFO>'hot_cold_search']{CONSOLE_COLOR['RESET']} - Target found at ({self.x}, {self.y})!")
                         self.handle_discovery()
                         return
                     
-                    # Si la cellule a une meilleure valeur
+                    # And check if the value that we have a better value 
                     if neighbor_cell_value > max_value:
                         max_value = neighbor_cell_value
                         if self.verbose:
                             print(f"{CONSOLE_COLOR['GREEN']}[INFO>'hot_cold_search']{CONSOLE_COLOR['RESET']}Better cell found at ({nx}, {ny}) with value {neighbor_cell_value}.")
                         break
                     elif neighbor_cell_value == max_value:
-                        self.move(OPPOSITE_DIRECTION_INDEX[direction_index])  # Revenez en arrière
+                        self.move(OPPOSITE_DIRECTION_INDEX[direction_index])  #we moove backward 
                         self.visit_cell((self.x, self.y))
                     else:
-                        # Si la valeur est inférieure ou égale, revenir à la cellule d'origine
-                        self.move(OPPOSITE_DIRECTION_INDEX[direction_index])  # Revenez en arrière
+                        # if the value is less or equal as the original cells we go back on it
+                        self.move(OPPOSITE_DIRECTION_INDEX[direction_index])  # moove backward
                         self.visit_cell((self.x, self.y))
-                
-                sleep(0.5)
                         
 
     def handle_discovery(self):
-        """
-        Handle the discovery of keys or boxes and communicate as needed.
+        """This function handles the discovery of key or box elements and updates the state.
+
+        Args:
+            None
         """
         cell_type, _ = self.get_data()
         if cell_type == "TARGET":
@@ -437,23 +512,23 @@ class Agent:
             elif item_type == BOX_TYPE:
                 self.communicate_discovery(BOX_TYPE, owner, *discovered_coord)
                 
-            # Ajouter la cellule et ses voisines dans forbidden_cells
-            for dx in range(-1, 2):  # Cases voisines (-1, 0, +1)
+            # add the cell and it neighbours in forbidden_cells
+            for dx in range(-1, 2):  # neighbours cells (-1, 0, +1)
                 for dy in range(-1, 2):
                     forbidden_x, forbidden_y = discovered_coord[0] + dx, discovered_coord[1] + dy
-                    if 0 <= forbidden_x < self.w and 0 <= forbidden_y < self.h:
-                        self.forbidden_cells.add((forbidden_x, forbidden_y))
+                    if 0 <= forbidden_x < self.w and 0 <= forbidden_y < self.h and (forbidden_x, forbidden_y) not in self.forbidden_cells:
+                        self.forbidden_cells.append((forbidden_x, forbidden_y))
 
             if owner == self.agent_id:
                 
-                # Mise à jour de l'état après découverte
+                # update state after discovering the cells value
                 if not self.nav_state["key"]["has_key"] and item_type == KEY_TYPE:
                     if self.verbose:
                         print(f"{CONSOLE_COLOR['CYAN']}[BEHAVIOR>'handle_discovery']{CONSOLE_COLOR['RESET']} Key picked up! We take it...")
                     self.nav_state["key"]["coord"] = discovered_coord
                     self.nav_state["key"]["has_key"] = True
                     if self.nav_state["box"]["coord"] == (None, None):
-                        # Décalage après découverte
+                        # Post-discovery offset
                         if self.verbose:
                             print(f"{CONSOLE_COLOR['CYAN']}[BEHAVIOR>'handle_discovery']{CONSOLE_COLOR['RESET']} - Shifting 3 cells after discovery to avoid cycles.")
                         self.shift_position(3)
@@ -466,7 +541,7 @@ class Agent:
                     self.nav_state["box"]["coord"] = discovered_coord
                     
                 if not self.nav_state["key"]["has_key"]:
-                    # Décalage après découverte
+                    # Post-discovery offset
                     if self.verbose:
                         print(f"{CONSOLE_COLOR['CYAN']}[BEHAVIOR>'handle_discovery']{CONSOLE_COLOR['RESET']} - Shifting 3 cells after discovery to avoid cycles.")
                     self.shift_position(3)
@@ -488,25 +563,27 @@ class Agent:
             
 
     def handle_broadcast_message(self, msg):
-        """
-        Gère les messages de type BROADCAST_MSG pour mettre à jour les coordonnées des clés ou des boîtes.
+        """Processes broadcast messages (BROADCAST_MSG) to update the coordinates of discovered elements (keys or boxes).
+
+        Args:
+            msg (dict): Received message containing information to process.
         """
         if msg["header"] == BROADCAST_MSG:
-            discovery_type = msg.get("type")  # Type d'élément découvert (clé ou boîte)
-            position = msg.get("position")  # Coordonnées de l'élément découvert
-            owner = msg.get("owner")  # Propriétaire de l'élément découvert
+            discovery_type = msg.get("type")  # type of the discovered element (key or boxe)
+            position = msg.get("position")  # Coordonnate of the element
+            owner = msg.get("owner")  # Owner of the item discovered
             self.internal_agent_broadcast_stat['nb_receive']+=1
 
             if owner != None and int(owner) == int(self.agent_id):
                 if int(discovery_type) == KEY_TYPE :
-                    # Met à jour les coordonnées de la clé si elle appartient à cet agent
+                    # Updates of the key coordonate if it belongs to this agent
                     self.nav_state["key"]["coord"] = position
                     self.internal_agent_broadcast_stat['key_coord_found_by_other'] = True
                     if self.verbose:
                         print(f"{CONSOLE_COLOR['GREEN']}[INFO>'handle_broadcast_message']{CONSOLE_COLOR['RESET']} - Updated key position to {position} for agent {self.agent_id}.")
 
                 if int(discovery_type) == BOX_TYPE:
-                    # Met à jour les coordonnées de la boîte si elle appartient à cet agent
+                    # Updates of the box coordonate if it belongs to this agent
                     self.nav_state["box"]["coord"] = position
                     self.internal_agent_broadcast_stat['box_coord_found_by_other'] = True
                     if self.verbose:
@@ -518,15 +595,16 @@ class Agent:
 
 
     def shift_position(self, shift_distance):
+        """Shifts the agent by a specified distance in a random direction.
+
+        Args:
+            shift_distance (int): Shift distance.
         """
-        Déplace le robot de shift_distance cases dans une direction aléatoire.
-        """
-        # Revenir en mode navigation
+        # to come back on navigation mode 
         if self.nav_state["nav_state"] != 'mission_completed':
-            directions = list(DIRECTION.keys())  # Toutes les directions possibles
-            direction = random.choice(directions)  # Choisit une direction aléatoire
+            directions = list(DIRECTION.keys())  # with all possible directions
+            direction = random.choice(directions)  # it choose a random direction 
             for _ in range(shift_distance):
-                sleep(0.5)
                 dx, dy = DIRECTION_MAP[direction]
                 self.move(direction)
                 self.x += dx
@@ -540,14 +618,14 @@ class Agent:
        
 
     def communicate_discovery(self, discovery_type, owner, x, y):
-        """
-        Envoie un message de découverte à tous les agents via le serveur.
-        Gère les erreurs réseau et vérifie l'état de la connexion avant l'envoi.
+        """Broadcasts a message to report the discovery of an element on the server. This function will also help to
+        handle network errors and verify the connection befor sending the message
 
         Args:
-            discovery_type (str): Type de l'élément découvert (clé ou boîte).
-            x (int): Coordonnée X de l'élément découvert.
-            y (int): Coordonnée Y de l'élément découvert.
+            discovery_type (str): Type of the discovered element (key or box).
+            owner (int): ID of the owner of the discovered element.
+            x (int): X coordinate of the element.
+            y (int): Y coordinate of the element.
         """
         msg = {
             "sender": self.agent_id,
@@ -557,20 +635,20 @@ class Agent:
             "owner": owner
         }
         try:
-            # Vérifier si l'agent est encore actif
+            # we verify if the agent still active 
             if not self.running:
                 if self.verbose:
                     print(f"{CONSOLE_COLOR['YELLOW']}[WARNING>'communicate_discovery'] - Agent not running. Message not sent.{CONSOLE_COLOR['RESET']}")
                 return
 
-            # Envoi du message
+            # send a message 
             if owner != self.agent_id:
                 self.network.send(msg)
                 self.internal_agent_broadcast_stat['nb_send']+=1
                 if self.verbose:
                     print(f"{CONSOLE_COLOR['MAGENTA']}[BROADCAST>'communicate_discovery'] - {msg}{CONSOLE_COLOR['RESET']}")
 
-            # Ajout d'un délai pour éviter la surcharge réseau
+            # we add a delay to avoid network overload
             sleep(0.1)
 
         except ConnectionResetError:
@@ -592,6 +670,11 @@ class Agent:
 
 
     def communicate_completed_mission(self):
+        """Broadcasts a message indicating the completion of the mission.
+
+        Args:
+            None
+        """
         msg = {
             "sender":self.agent_id,
             "header": BROADCAST_MSG,
@@ -604,43 +687,69 @@ class Agent:
         
 
     def move(self, direction):
+        """Moves the agent in the specified direction.
+
+        Args:
+            direction (int): Direction to move the agent.
+        """
         self.network.send({'sender': self.agent_id, 'header': 2, 'direction': direction})
         sleep(0.05)
         
         
     def visit_cell(self, cell):
+        """Adds a cell to the list of visited cells and updates unique cells.
+
+        Args:
+            cell (tuple[int, int]): Coordinates of the visited cell by a tuple.
         """
-        Ajoute une cellule à la liste des cellules visitées et met à jour les cellules uniques.
-        :param cell: Tuple représentant les coordonnées de la cellule (x, y)
-        """
-        self.visited_cells.append(cell)  # Ajouter à la liste
-        self.visited_unic_cells.add(cell)  # Ajouter à l'ensemble (unique par nature)
+        self.visited_cells.append(cell)  
+        self.visited_unic_cells.add(cell)  
 
 
+    #the next 3 functions will help us to provide some stastistics of the robots performances
     def get_unique_cell_count(self):
-        """
-        Retourne le nombre de cellules uniques visitées.
-        :return: Nombre d'éléments dans visited_unic_cells
+        """Returns the number of unique cells visited.
+
+        Args:
+            None
+
+        Returns:
+            int: Number of unique cells visited on visited_unic_cells
         """
         return len(self.visited_unic_cells)
     
     
     def get_visited_cell_count(self):
-        """
-        Retourne le nombre de cellules uniques visitées.
-        :return: Nombre d'éléments dans visited_unic_cells
+        """Returns the total number of visited cells.
+
+        Args:
+            None
+
+        Returns:
+            int: Total number of visited cells.
         """
         return len(self.visited_cells)
     
     
     def get_total_cells(self):
+        """Calculates the total number of cells in the grid.
+
+        Args:
+            None
+
+        Returns:
+            int: Total number of cells in the grid.
+        """
         total_cells = self.w * self.h
         return total_cells
 
 
     def get_data(self):
-        """
-        Get the value of the current cell and classify it based on known percentages.
+        """Retrieves the value of the current cell and classifies it.
+
+        Args:
+            None
+
         Returns:
             cell_type (str): The type of the cell (e.g., "KEY_NEIGHBOR", "OBSTACLE").
             cell_value (float): The raw value of the cell for numeric comparisons.
@@ -682,14 +791,14 @@ class Agent:
         try:
             while time() - start_time < timeout:
                 self.network.send({'sender': self.agent_id, 'header': GET_ITEM_OWNER})
-                sleep(0.1)  # Donne un peu de temps pour recevoir une réponse
+                sleep(0.1)  # wait a bit until having an answer.
 
                 owner = self.msg
                 
                 if "owner" in owner and owner["owner"] is not None:
                     return (owner["owner"], owner["type"])
 
-            # Timeout atteint
+            # Timeout is pass
             if self.verbose:
                 print(f"{CONSOLE_COLOR['YELLOW']}[WARNING>'get_owner'] - Timeout reached while waiting for owner response.{CONSOLE_COLOR['RESET']}")
             return "UNKNOWN", -1.0
@@ -698,25 +807,32 @@ class Agent:
             if self.verbose:
                 print(f"{CONSOLE_COLOR['RED']}[ERROR>'get_owner'] - {e}{CONSOLE_COLOR['RESET']}")
                 traceback.print_exc()
-            return "UNKNOWN", -1.0  # Retour en cas d'erreur
+            return "UNKNOWN", -1.0  # return if there's an error 
 
         
     def display_robot_stat(self):
-        # Utilisez l'heure actuelle pour les calculs
+        """Displays the agent's statistics, including navigation performance.
+
+        Args:
+            None
+        """
+        # using the actual hour for calculs 
         end_time = self.end_date_time if self.end_date_time else datetime.now()
         
-        # Calcul du temps écoulé
+        # pass time calculation 
         elapsed_time = end_time - self.start_date_time
         elapsed_seconds = elapsed_time.total_seconds()
         
-        # Nombre de cellules uniques visitées et total de cellules
+        # number of unique visited cells and total visited cells to have a ratio to see if the robot pass a lot on his 
+        #previous paths
         unique_cells = self.get_unique_cell_count()
         total_cells = self.get_total_cells()
         
-        # Calcul du pourcentage de découverte
+        # Calcul Calcul of the discover pourcentage 
         percentage_discovered = (unique_cells / total_cells) * 100 if total_cells > 0 else 0
         ration_unique_vs_visited = 1 - (unique_cells/total_cells)
 
+        #and print all the stats
         print(f"""
 {CONSOLE_COLOR['BLUE']}============ Robot Information ============{CONSOLE_COLOR['RESET']}
 [TIME PROCESSING]
@@ -743,6 +859,12 @@ class Agent:
     """)
 
     def periodic_display(self):
+        """We periodically displays the agent's statistics to see what they're doing and see if they behavior are correct
+        and normal.
+
+        Args:
+            None
+        """
         while self.running and self.nav_state["nav_state"] != 'mission_completed':  # Continue seulement si self.running est True
             current_time = datetime.now()
             if (current_time - self.last_display_time).total_seconds() >= 20:
@@ -753,22 +875,27 @@ class Agent:
 
 
     def start_display_thread(self):
+        """Starts a thread for periodic statistics display.
+
+        Args:
+            None
+        """
         display_thread = Thread(target=self.periodic_display, daemon=True)
         display_thread.start()
         print("Display thread started!")
         
     def stop(self):
+        """We stops all ongoing threads.
+
+        Args:
+            None
+        """
         self.running = False
         print("Stopping all threads...")
-        
-    def wating_other_to_finished(self):
-        while self.msg['header']:
-            pass
+
 
 
 if __name__ == "__main__":
-    from random import randint
-    import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("-i", "--server_ip", help="Ip address of the server", type=str, default="localhost")
     parser.add_argument("-r", "--run", help="Run the agent with our behavior or not : autonomous/manual", type=str, default="manual")

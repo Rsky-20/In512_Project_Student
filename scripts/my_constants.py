@@ -37,6 +37,30 @@ DIRECTION_MAP = {
             8: (1, 1)     # down_right
         }
 
+# Directions perpendiculaires dans le sens horaire
+CLOCKWISE_DIRECTION_INDEX = {
+    1: 3,  # left -> up
+    3: 2,  # up -> right
+    2: 4,  # right -> down
+    4: 1,  # down -> left
+    5: 6,  # up_left -> up_right
+    6: 8,  # up_right -> down_right
+    8: 7,  # down_right -> down_left
+    7: 5   # down_left -> up_left
+}
+
+# Directions perpendiculaires dans le sens anti-horaire
+COUNTERCLOCKWISE_DIRECTION_INDEX = {
+    1: 4,  # left -> down
+    4: 2,  # down -> right
+    2: 3,  # right -> up
+    3: 1,  # up -> left
+    5: 7,  # up_left -> down_left
+    7: 8,  # down_left -> down_right
+    8: 6,  # down_right -> up_right
+    6: 5   # up_right -> up_left
+}
+
 """ BROADCAST TYPES """
 KEY_DISCOVERED = 1  #inform other agents that you discovered a key
 BOX_DISCOVERED = 2
