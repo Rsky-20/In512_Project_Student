@@ -44,7 +44,7 @@ def run_in_console(command):
         messagebox.showerror("Erreur", f"Terminal non trouvé pour le système {system_platform}. Vérifiez votre configuration.")
 
 # Fonction pour arrêter tous les processus
-def close_all_processes(validate_button, server_button, open_processes):
+def close_all_processes(validate_button, server_button):
     global server_running
     if open_processes:
         processes_to_remove = []
@@ -201,7 +201,7 @@ def create_gui():
         run_in_console(command)
 
     def close_all():
-        close_all_processes(validate_button, server_button, param_widgets)
+        close_all_processes(validate_button, server_button)
 
     validate_button = ttk.Button(root, text="Valider Paramétrage", command=validate_config)
     validate_button.grid(row=7, column=0, padx=5, pady=5)
