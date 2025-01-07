@@ -7,7 +7,7 @@
 | **Version**           | v7.01.2025                                                            |
 | **Python Version**    | Python 3.12.2                                                         |          
 
-[Description of the image](https://github.com/Rsky-20/In512_Project_Student/tree/main/resources/img/wall-e.png?raw=true)
+![Description of the image](resources/img/wall-e.png)
 
 ## Install python env and library
 If not yet installed, open a terminal and run the following instruction:
