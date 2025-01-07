@@ -102,7 +102,7 @@ To have a local version of this GitHub repository, you have to clone it. Run the
 Another solution is to open a terminal and run: -->
 ```bash
 cd your_desired_path
-git clone https://github.com/AybukeOzturk/In512_Project_Student
+git clone https://github.com/Rsky-20/In512_Project_Student
 ```
 
 ## Instructions to run the scripts
