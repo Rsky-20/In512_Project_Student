@@ -1,4 +1,4 @@
-# IN512_Project - Unlock Boxes
+# IN512_Project - Unlock Boxes - Intelligent Distributed Systems
 
 |                       | **Details**                                                           |
 |-----------------------|-----------------------------------------------------------------------|
@@ -8,6 +8,58 @@
 | **Python Version**    | Python 3.12.2                                                         |          
 
 ![Description of the image](resources/img/wall-e.png)
+
+# Table of Contents
+
+1. [IN512_Project - Unlock Boxes - Intelligent Distributed Systems](#in512_project---unlock-boxes---intelligent-distributed-systems)
+    - [Project Details](#project-details)
+    - [Team and Version Information](#team-and-version-information)
+
+2. [Overview](#overview)
+
+3. [Features](#features)
+    - [Navigation](#navigation)
+    - [Detection](#detection)
+    - [Communication](#communication)
+    - [Obstacle Avoidance](#obstacle-avoidance)
+    - [Collaboration](#collaboration)
+
+4. [Key Components](#key-components)
+    - [Random Point Generation](#random-point-generation)
+    - [Hot/Cold Search Algorithm](#hotcold-search-algorithm)
+    - [Message Broadcasting](#message-broadcasting)
+
+5. [Install Python Environment and Libraries](#install-python-environment-and-library)
+    - [Installation Steps](#installation-steps)
+
+6. [Git](#git)
+    - [Install Git](#install-git)
+    - [Configure Git for GitHub](#configure-git-for-github)
+
+7. [Clone the Repository](#clone-the-repository)
+
+8. [Instructions to Run the Scripts](#instructions-to-run-the-scripts)
+    - [Run the Application Locally with 2 Agents](#run-the-application-with-2-agents-locally)
+    - [Run the Application on Several Computers](#run-the-application-with-2-agents-on-several-computers)
+    - [Run the Application with GUI](#run-the-application-with-gui)
+
+---
+
+## Overview
+This project is part of the IN512 course and focuses on implementing a system of collaborative robots navigating a grid to complete their missions. Each robot is tasked with locating its unique key and corresponding box while navigating efficiently, avoiding obstacles, and communicating with other robots.
+
+## Features
+- **Navigation**: Robots navigate by targeting the furthest randomly generated points near the grid's border using Euclidean distance.
+- **Detection**: Robots detect objects such as keys, boxes, and obstacles by interpreting cell values in the grid.
+- **Communication**: Robots communicate discoveries (keys, boxes) using a broadcast message protocol to assist other agents.
+- **Obstacle Avoidance**: Robots adapt their path to avoid obstacles by stepping back and recalculating their route.
+- **Collaboration**: Robots share information to optimize their search and minimize redundant paths.
+
+## Key Components
+- **Random Point Generation**: Robots generate points of interest to explore the map effectively.
+- **Hot/Cold Search Algorithm**: Robots use a gradient-based approach to locate keys and boxes.
+- **Message Broadcasting**: Robots broadcast discoveries to the server, which relays them to other agents.
+
 
 ## Install python env and library
 If not yet installed, open a terminal and run the following instruction:
