@@ -247,7 +247,6 @@ class Agent:
                 if self.verbose:
                     print(f"{CONSOLE_COLOR['CYAN']}[BEHAVIOR>'navigate_to_points']{CONSOLE_COLOR['RESET']} - Moving directly to open the box ({self.x}, {self.y}) -> {self.nav_state["box"]["coord"]}.{CONSOLE_COLOR['RESET']}")
         
-            
             if not self.points_of_interest:
                 self.points_of_interest = self.get_random_interest_points()
                 self.points_of_interest = self.determine_order(self.points_of_interest, (self.x, self.y))
@@ -302,7 +301,7 @@ class Agent:
                         self.path = []
                         break
 
-                    sleep(0.1)
+                    sleep(0.2)
 
             
         print(f"{CONSOLE_COLOR['GREEN']}[INFO>'navigate_to_points'] - Stopping navigation process.{CONSOLE_COLOR['RESET']}")
@@ -319,24 +318,29 @@ class Agent:
         print(self.orders)
         is_opposite = False
         while self.orders:
-            command = self.orders.pop(0)
-            self.nav_state["last_direction"] = command
-            self.nav_state["last_coord"] = (self.x, self.y)
-            self.path.pop(0)
-            last_dist = self.calculate_euclidean_distance((self.x, self.y),(target_x, target_y))
-            if is_opposite:
-                self.move(OPPOSITE_DIRECTION_INDEX[command])
+            cell_type, _ = self.get_data()
+            if cell_type == 'OBSTACLE_NEIGHBOR':
+                self.avoid_obstacle()
+                self.shift_position(4)
+                break
             else:
-                self.move(command)
-            new_dist = self.calculate_euclidean_distance((self.x, self.y),(target_x, target_y))
-            self.visit_cell((self.x, self.y))
-            if new_dist>last_dist:
-                is_opposite = True
+                command = self.orders.pop(0)
+                self.nav_state["last_direction"] = command
+                self.nav_state["last_coord"] = (self.x, self.y)
+                self.path.pop(0)
+                last_dist = self.calculate_euclidean_distance((self.x, self.y),(target_x, target_y))
+                if is_opposite:
+                    self.move(OPPOSITE_DIRECTION_INDEX[command])
+                else:
+                    self.move(command)
+                new_dist = self.calculate_euclidean_distance((self.x, self.y),(target_x, target_y))
+                self.visit_cell((self.x, self.y))
+                if new_dist>last_dist:
+                    is_opposite = True
             
-            sleep(1)
+            sleep(0.5)
         
-        
-
+    
     def avoid_obstacle(self):
         """
         Handle obstacle by stepping back using directions from DIRECTION and OPPOSITE_DIRECTION_INDEX.
@@ -357,6 +361,7 @@ class Agent:
         # Reculer de 2 cases dans la direction opposée
         for _ in range(2):  # Boucle pour reculer de 2 cases
             self.move(reverse_direction)  # Utilisation de la direction
+            sleep(0.5)
             if self.verbose:
                 print(f"{CONSOLE_COLOR['CYAN']}[BEHAVIOR>'avoid_obstacle']{CONSOLE_COLOR['RESET']} - Stepped back in direction '{DIRECTION[reverse_direction]}'.")
 
@@ -376,7 +381,7 @@ class Agent:
             print(f"{CONSOLE_COLOR['CYAN']}[BEHAVIOR>'hot_cold_search']{CONSOLE_COLOR['RESET']} - Hot/Cold search initiated.{CONSOLE_COLOR['RESET']}")
 
         while True:
-            sleep(0.2)
+            sleep(0.5)
             _, current_cell_value = self.get_data()  # Obtenez les données de la cellule actuelle
             max_value = current_cell_value  # Initialisez la valeur max avec la valeur actuelle
             original_x, original_y = self.x, self.y  # Stockez la position actuelle
@@ -414,6 +419,8 @@ class Agent:
                         # Si la valeur est inférieure ou égale, revenir à la cellule d'origine
                         self.move(OPPOSITE_DIRECTION_INDEX[direction_index])  # Revenez en arrière
                         self.visit_cell((self.x, self.y))
+                
+                sleep(0.5)
                         
 
     def handle_discovery(self):
@@ -429,15 +436,15 @@ class Agent:
                 self.communicate_discovery(KEY_TYPE, owner, *discovered_coord)
             elif item_type == BOX_TYPE:
                 self.communicate_discovery(BOX_TYPE, owner, *discovered_coord)
+                
+            # Ajouter la cellule et ses voisines dans forbidden_cells
+            for dx in range(-1, 2):  # Cases voisines (-1, 0, +1)
+                for dy in range(-1, 2):
+                    forbidden_x, forbidden_y = discovered_coord[0] + dx, discovered_coord[1] + dy
+                    if 0 <= forbidden_x < self.w and 0 <= forbidden_y < self.h:
+                        self.forbidden_cells.add((forbidden_x, forbidden_y))
 
             if owner == self.agent_id:
-                
-                # Ajouter la cellule et ses voisines dans forbidden_cells
-                for dx in range(-1, 2):  # Cases voisines (-1, 0, +1)
-                    for dy in range(-1, 2):
-                        forbidden_x, forbidden_y = discovered_coord[0] + dx, discovered_coord[1] + dy
-                        if 0 <= forbidden_x < self.w and 0 <= forbidden_y < self.h:
-                            self.forbidden_cells.add((forbidden_x, forbidden_y))
                 
                 # Mise à jour de l'état après découverte
                 if not self.nav_state["key"]["has_key"] and item_type == KEY_TYPE:
@@ -519,6 +526,7 @@ class Agent:
             directions = list(DIRECTION.keys())  # Toutes les directions possibles
             direction = random.choice(directions)  # Choisit une direction aléatoire
             for _ in range(shift_distance):
+                sleep(0.5)
                 dx, dy = DIRECTION_MAP[direction]
                 self.move(direction)
                 self.x += dx

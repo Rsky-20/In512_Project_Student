@@ -72,7 +72,7 @@ def close_all_processes(validate_button, server_button):
     
     # Réinitialise l'état du serveur
     server_running = False
-    reset_ui(validate_button, server_button)
+    reset_ui(validate_button, server_button, agent_buttons)
 
 
 # Fonction pour réinitialiser l'interface utilisateur
