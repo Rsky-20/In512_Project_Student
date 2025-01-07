@@ -1,11 +1,25 @@
-# IN512_Project
+# IN512_Project - Unlock Boxes
 
-## Install Pygame
-Pygame is a python package used to generate the simulated environments of this project.
+|                       | **Details**                                                           |
+|-----------------------|-----------------------------------------------------------------------|
+| **Date of Creation**  | 18.11.2024                                                            |
+| **Team**              | Emma CADOT, Valentin DESFORGES, Sylvain LAGARENNE, Pierre VAUDRY      |
+| **Version**           | v7.01.2025                                                            |
+| **Python Version**    | Python 3.12.2                                                         |          
+
+![Description of the image](.\resources\img\wall-e.png)
+
+## Install python env and library
 If not yet installed, open a terminal and run the following instruction:
+
 ```bash
-pip install pygame  #On Windows
-pip3 install pygame #On MAC OS
+python -m env .venv
+
+source .\.venv\Scripts\activate # macOS/Linux
+.\.venv\Scripts\activate        # Windows
+
+pip install -r requirements.txt # Windows/Linux
+pip3 install -r requirements.txt # macOS
 ```
 
 If you have any difficulty with the installation, please call your teacher.
@@ -48,6 +62,7 @@ python3 scripts/server.py -nb 2 #On MAC OS
 ```
 
 2. Open two other terminals and run, **for each of them**, the following instruction:
+(Default: 127.0.0.1)
 ```bash
 python scripts/agent.py #On windows
 python3 scripts/agent.py #On MAC OS
@@ -57,16 +72,28 @@ Once both terminals run the agent script, the environment should appear.
 
 
 ### Run the application with 2 agents on several computers
-1. Run the server on one of the computers by specifing its ip address (for instance if the computer's ip address is 10.9.157.250):
+1. Run the server on one of the computers by specifing its ip address (for instance if the computer's ip address is X.X.X.X):
 ```bash
-python scripts/server.py -nb 2 -i 10.9.157.250 #On windows
-python3 scripts/server.py -nb 2 -i 10.9.157.250 #On MAC OS
+python scripts/server.py -nb 2 -i X.X.X.X #On windows
+python3 scripts/server.py -nb 2 -i X.X.X.X #On MAC OS
 ```
 
 2. On each computer, run one of the agents as follow:
 ```bash
-python scripts/agent.py -i 10.9.157.250 #On windows
-python3 scripts/agent.py -i 10.9.157.250 #On MAC OS
+python scripts/agent.py -i X.X.X.X #On windows
+python3 scripts/agent.py -i X.X.X.X #On MAC OS
+```
+
+### Run the application with 2 agents on several computers
+```bash
+python scripts/server.py -nb 2 -i X.X.X.X #On windows
+python3 scripts/server.py -nb 2 -i X.X.X.X #On MAC OS
 ```
 
 Once both terminals run the agent script, the environment should appear on the computer that hosts the server.
+
+### Run the application with GUI
+```bash
+python scripts/launcher.py #On windows
+python3 scripts/launcher.py #On MAC OS
+```
