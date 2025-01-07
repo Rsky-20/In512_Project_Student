@@ -7,7 +7,7 @@
 | **Version**           | v7.01.2025                                                            |
 | **Python Version**    | Python 3.12.2                                                         |          
 
-![Description of the image](.\resources\img\wall-e.png)
+[Description of the image](https://github.com/Rsky-20/In512_Project_Student/tree/main/resources/img/wall-e.png?raw=true)
 
 ## Install python env and library
 If not yet installed, open a terminal and run the following instruction:
@@ -94,6 +94,6 @@ Once both terminals run the agent script, the environment should appear on the c
 
 ### Run the application with GUI
 ```bash
-python scripts/launcher.py #On windows
-python3 scripts/launcher.py #On MAC OS
+python scripts/launch.py #On windows
+python3 scripts/launch.py #On MAC OS
 ```
