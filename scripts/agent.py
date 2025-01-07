@@ -123,7 +123,23 @@ class Agent:
         points = []
 
         while len(points) < num_points:
-            point = (random.randint(0, self.w - 1), random.randint(0, self.h - 1))
+            #point = (random.randint(0, self.w - 1), random.randint(0, self.h - 1))
+            point_bord_1 = (random.randint(0, self.w - 1), random.randint(self.h-4, self.h - 1))
+            point_bord_2 = (random.randint(0, 4), random.randint(0, self.h - 1))
+            point_bord_3 = (random.randint(0, self.w - 1), random.randint(0, 4))
+            point_bord_4 = (random.randint(self.w - 4, self.w - 1), random.randint(0, self.h - 1))
+            eucli_dist_bord = []
+            L = [point_bord_1,point_bord_2,point_bord_3,point_bord_4]
+            
+            for i in range(len(L)):
+                eucli_dist_bord.append(self.calculate_euclidean_distance((self.x,self.y),L[i]))
+            min_valeur = min(eucli_dist_bord)
+            index_min = eucli_dist_bord.index(min_valeur)
+            del L[index_min]
+            
+            point = L[randint(0,2)]
+            
+
             if point not in self.forbidden_cells and all(
                 self.calculate_euclidean_distance(point, existing_point) >= min_distance
                 for existing_point in points
